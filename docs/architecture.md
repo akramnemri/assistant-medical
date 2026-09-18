@@ -134,10 +134,59 @@ unrecognized payload must not take down the pipeline.
 
 ## Errors and observability
 
-**Not implemented yet — Task 1.2.** The intended shape: a small `AppError` type
-carrying a stable code, a safe user-facing message, and internal diagnostic
-context; structured logging keyed by request/correlation ID; normalized provider
-errors; a consistent API error response format; React error boundaries.
+Implemented in Task 1.2.
+
+**`AppError`** (`src/lib/errors/app-error.ts`) carries a stable code, a
+user-facing message and internal `context`. The rule everything else relies on:
+**`AppError.message` is always safe to show a user.** Internal detail lives in
+`context` or `cause`, which are logged and never serialized into a response.
+That makes leaking internals something you have to do deliberately.
+
+**Error codes** are a public contract. Add freely; never rename or repurpose.
+
+**`normalizeError`** (`src/lib/errors/normalize.ts`) reduces any thrown value to
+a loggable shape. JavaScript lets you throw a string, `undefined` or a plain
+object, and all of those reach a catch block eventually.
+
+**`toErrorResponse`** (`src/lib/errors/response.ts`) is the single place a failed
+request is turned into a response. It returns only `{ code, message, requestId }`
+— never a stack, cause, context or provider payload. An unexpected throw becomes
+a generic `UNKNOWN`, because nothing has vetted what its message contains. 4xx
+logs at `warn` (keeping the AppError's context, since "which field failed" is
+the diagnostic value); 5xx logs at `error` with the stack.
+
+**The logger** (`src/lib/logger/logger.ts`) emits one JSON object per line, with
+no logging dependency. `buildLogEntry` is exported separately so tests can assert
+on the exact structure, including what redaction removed.
+
+**Redaction** (`src/lib/logger/redact.ts`) is the control that matters, and it
+runs over the caller's context _and_ the normalized error — an `AppError`'s own
+context is easy to populate with a raw provider payload. Two mechanisms:
+
+- _Key-based_, the primary control. Keys are normalized (`wa_id`, `WA-ID` and
+  `waId` collapse to the same form) so a new casing convention cannot bypass it.
+  Most patterns match as substrings; `body`, `text` and `caption` match
+  **exactly**, because matching "text" as a substring also redacts `context` and
+  silently guts every error log.
+- _Inline scrubbing_, best-effort defence in depth for secrets embedded in free
+  text — typically a database driver putting a connection string into an error
+  message. This is not a guarantee, which is why error messages remain
+  internal-only.
+
+**Correlation IDs** (`src/lib/request-id.ts`) are generated per request, returned
+in the `x-request-id` header and the response body, and attached to every log
+line. An inbound ID is reused only if it matches `[A-Za-z0-9_-]{1,128}` — an
+attacker-supplied newline would otherwise let a caller forge log entries.
+
+**Error boundaries**: `src/app/error.tsx` for route segments and
+`src/app/global-error.tsx` for failures in the root layout itself. The latter
+renders its own `<html>`/`<body>` with inline styles, since a broken root layout
+may be exactly what failed. Both surface Next's `digest`, which matches the
+server log, so a user has something to quote.
+
+**Development-only routes**: `/api/dev/error` and `/dev/throw` exercise these
+paths by hand. Both return 404 outside development, and an E2E test asserts that
+against a real production build.
 
 Rules that apply from the start:
 

@@ -49,3 +49,23 @@ test("sidebar navigation moves between workspace routes", async ({ page }) => {
   await nav.getByRole("link", { name: "WhatsApp" }).click();
   await expect(page).toHaveURL(/\/whatsapp$/);
 });
+
+/**
+ * The E2E suite runs against a production build, which is exactly where the
+ * development-only routes must not be reachable. A gate that is only asserted
+ * in unit tests would not catch a build that ships them.
+ */
+test.describe("development-only routes are inert in a production build", () => {
+  test("the dev error endpoint returns 404", async ({ request }) => {
+    const response = await request.get("/api/dev/error?kind=app");
+
+    expect(response.status()).toBe(404);
+  });
+
+  test("the dev throw page returns 404", async ({ page }) => {
+    const response = await page.goto("/dev/throw");
+
+    expect(response?.status()).toBe(404);
+    await expect(page.getByRole("heading", { name: /page not found/i })).toBeVisible();
+  });
+});
