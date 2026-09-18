@@ -3,9 +3,9 @@
 A multi-tenant SaaS application that lets doctors centralize and manage patient
 conversations received through WhatsApp.
 
-> **Status: Phase 0 — baseline.** Tooling and the application shell exist.
-> Authentication, the database schema, and the WhatsApp integration are not
-> implemented yet.
+> **Status: Phase 1 — application skeleton.** Tooling and the route structure
+> exist. Authentication, the database schema, and the WhatsApp integration are
+> not implemented yet, and no route is access-controlled.
 
 ## Stack
 
@@ -95,7 +95,7 @@ Architectural rules of the codebase:
    application code.
 5. Webhook processing is idempotent — Meta retries deliveries.
 
-Detailed notes live in `docs/architecture.md` (added in a later task).
+Detailed notes live in [docs/architecture.md](docs/architecture.md).
 
 ## Branching and workflow
 
