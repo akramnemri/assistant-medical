@@ -51,7 +51,8 @@ and `LayoutProps` helpers that give those params real types, and
 
 ## Multi-tenant ownership
 
-**Not implemented yet — Task 2.3.** The intended model:
+Implemented in Task 2.3 (`supabase/migrations/…_workspace_tenant_model.sql`).
+The model:
 
 ```text
 auth user  ->  profile  ->  membership  ->  workspace
@@ -69,6 +70,31 @@ Every tenant-owned row must have an unambiguous path back to a workspace, so an
 RLS policy can be written without guesswork. Provider identifiers (phone number
 ID, WABA ID, provider message ID) are stored as provider identifiers — never as
 the application's own primary keys.
+
+Three tables exist today: `profiles` (1:1 with `auth.users`), `workspaces` (the
+tenant boundary) and `workspace_members` (membership plus role, keyed on
+`(workspace_id, user_id)` so duplicate membership is unrepresentable).
+
+**Provisioning is a database trigger, not application code.** `handle_new_user`
+creates the profile, a workspace and the owner membership inside the same
+transaction as the `auth.users` insert. A user with no workspace cannot use the
+product and a workspace with no owner is unreachable; doing this in a route
+handler would leave both states reachable whenever a request failed midway. The
+trade-off is that a bug in that function breaks all registration.
+
+**Workspaces are created through `public.create_workspace()`, not a bare
+insert.** There is deliberately no INSERT policy on `workspaces`: a workspace
+inserted directly would have no owner and be immediately invisible to everyone.
+The function creates both rows together and always makes the caller the owner,
+so it cannot be used to join an existing workspace.
+
+**Membership lookups go through `is_workspace_member()` / `has_workspace_role()`,
+which are `SECURITY DEFINER`.** This is load-bearing: a policy on
+`workspace_members` that queried `workspace_members` would recurse infinitely.
+Running the lookup as the function owner bypasses RLS for that one read and
+breaks the cycle. Each such function sets `search_path = ''` and fully qualifies
+every identifier, closing the classic `SECURITY DEFINER` escalation route, and
+`EXECUTE` is revoked from `public`/`anon` and granted only to `authenticated`.
 
 ## Authorization and RLS
 
@@ -96,9 +122,24 @@ users would be silently signed out), and it gates routing. When it redirects it
 copies the refreshed cookies onto the redirect response — a bare
 `NextResponse.redirect` would discard them.
 
-**Authorization is not implemented — Task 2.3.** Any signed-in user can reach
-every route including `/admin`; there are no workspaces, roles or RLS policies
-yet, because there is no schema to attach them to.
+Tenant authorization is implemented at the database level (Task 2.3). RLS is
+enabled on all three tables, and the policies are verified by 29 pgTAP
+assertions in `supabase/tests/` covering the denied paths as well as the allowed
+ones — a policy that grants correctly but fails to deny looks identical from the
+application until one doctor sees another's patients.
+
+Two testing details worth preserving when adding tables:
+
+- Cross-tenant writes must be attempted with a **literal** id captured before
+  the role switch. Deriving the target from a sub-select makes the test pass for
+  the wrong reason: RLS filters the sub-select to zero rows, the write becomes a
+  no-op, and the policy is never exercised.
+- A blocked UPDATE or DELETE does not raise — it matches no row — so absence of
+  effect is verified afterwards from a privileged connection.
+
+**Role-based authorization within the product is still open.** `/admin` is
+reachable by any signed-in user; the `owner`/`admin`/`member` roles exist and
+gate workspace updates and deletes, but no route checks them yet.
 
 Sign-in deliberately returns the same message for an unknown email and a wrong
 password. Distinguishing them would let anyone test whether a given doctor has

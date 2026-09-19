@@ -14,7 +14,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "verify": "npm run typecheck && npm run lint && npm run format:check && npm run test && npm run build"
+    "verify": "npm run typecheck && npm run lint && npm run format:check && npm run test && npm run build",
+    "db:reset": "supabase db reset",
+    "db:test": "supabase test db",
+    "db:types": "supabase gen types typescript --local > src/types/database.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
@@ -48,6 +51,7 @@
     "prettier": "^3.9.8",
     "prettier-plugin-tailwindcss": "^0.8.1",
     "shadcn": "^4.21.0",
+    "supabase": "^2.117.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vite": "^8.3.0",

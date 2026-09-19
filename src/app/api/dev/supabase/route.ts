@@ -34,10 +34,10 @@ export async function GET(request: Request): Promise<Response> {
     // all, so a transport failure is the only interesting outcome.
     const user = await getCurrentUser();
 
-    // A trivial authenticated-as-anon call that proves PostgREST is up. It is
-    // expected to fail with a "relation does not exist" error until Task 2.3
-    // creates the schema; a connection error looks different.
-    const probe = await supabase.from("__connectivity_probe__").select("*").limit(1);
+    // Proves PostgREST is up and RLS is applied. Signed out this returns zero
+    // rows and no error, which is the correct answer rather than a failure —
+    // the policy denies the read, it does not error.
+    const probe = await supabase.from("profiles").select("id").limit(1);
 
     return Response.json(
       {
@@ -47,7 +47,8 @@ export async function GET(request: Request): Promise<Response> {
         secretKeyConfigured: hasSupabaseSecretKey(),
         authReachable: true,
         signedInUser: user === null ? null : user.id,
-        postgrestReachable: probe.error === null || probe.error.code !== undefined,
+        postgrestReachable: probe.error === null,
+        visibleProfileCount: probe.data?.length ?? 0,
         postgrestCode: probe.error?.code ?? null,
         requestId,
       },
