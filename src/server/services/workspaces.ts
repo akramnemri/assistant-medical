@@ -1,17 +1,19 @@
-import "server-only";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { requireCurrentUser } from "@/lib/supabase/session";
+import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { AppError, ERROR_CODES } from "@/lib/errors/app-error";
 import { logger } from "@/lib/logger/logger";
 import type { Database } from "@/types/database";
 
+type Client = SupabaseClient<Database>;
+
 /**
  * Workspace reads for the signed-in user.
  *
- * These queries use the RLS-bound server client, so the database independently
- * enforces what they may return. The application-side checks here are the
- * second layer, not the only one: if a query were wrong, RLS would still return
- * no rows rather than another tenant's.
+ * The Supabase client is passed in rather than built here, so these functions
+ * can be tested against a real database without a request context.
+ *
+ * The client is expected to be RLS-bound, so the database independently
+ * enforces what these may return. The application-side checks are the second
+ * layer, not the only one.
  *
  * Nothing in this module accepts a workspace id from the browser as
  * authoritative — membership is always derived from the session.
@@ -31,10 +33,10 @@ export type Workspace = {
  * Selects only the columns the UI needs rather than `*`, so adding a column to
  * the table later does not silently widen what gets shipped to the browser.
  */
-export async function listUserWorkspaces(): Promise<Workspace[]> {
-  const user = await requireCurrentUser();
-  const supabase = await createSupabaseServerClient();
-
+export async function listUserWorkspaces(
+  supabase: Client,
+  user: User,
+): Promise<Workspace[]> {
   const { data, error } = await supabase
     .from("workspace_members")
     .select("role, created_at, workspaces (id, name)")
@@ -75,8 +77,11 @@ export async function listUserWorkspaces(): Promise<Workspace[]> {
  * multiple workspaces and a switcher arrive, this becomes "the selected
  * workspace" and every caller keeps working.
  */
-export async function getCurrentWorkspace(): Promise<Workspace> {
-  const workspaces = await listUserWorkspaces();
+export async function getCurrentWorkspace(
+  supabase: Client,
+  user: User,
+): Promise<Workspace> {
+  const workspaces = await listUserWorkspaces(supabase, user);
   const workspace = workspaces[0];
 
   if (workspace === undefined) {

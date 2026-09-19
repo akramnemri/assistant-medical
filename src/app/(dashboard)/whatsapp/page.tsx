@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getCurrentWorkspace } from "@/server/services/workspaces";
+import { getRequestContext } from "@/server/request-context";
 import {
   getActiveConnection,
   type WhatsAppConnectionStatus,
@@ -15,8 +15,8 @@ export const metadata: Metadata = { title: "WhatsApp" };
  * opening Supabase Studio.
  */
 export default async function WhatsAppConnectionPage() {
-  const workspace = await getCurrentWorkspace();
-  const connection = await getActiveConnection(workspace.id);
+  const { supabase, workspace } = await getRequestContext();
+  const connection = await getActiveConnection(supabase, workspace.id);
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-10">

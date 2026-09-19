@@ -233,6 +233,38 @@ and is enforced by a unique constraint rather than by application logic alone.
 Unknown event and message types are recorded and safely ignored — one
 unrecognized payload must not take down the pipeline.
 
+## Conversation data service
+
+Implemented in Task 3.3 (`src/server/services/conversations.ts`).
+
+**Services take the Supabase client as an argument** rather than constructing
+one. The request-scoped client is created once at the edge, by
+`getRequestContext()` in `src/server/request-context.ts`, which is the only
+place that reads cookies. That is what lets the services be tested against a
+real database without a request context — and the tests that matter here
+(ordering, keyset pagination, what one tenant cannot see) only mean anything
+against real Postgres. A mocked client would assert that the code calls the
+functions it calls.
+
+**Pagination is keyset, not OFFSET.** A thread grows while it is being read;
+with OFFSET a message arriving between two requests shifts every later row and
+the reader silently misses one. The cursor is `(sent_at, id)` — see the ordering
+note above for why the id is not optional — base64url-encoded because it travels
+in a query string, and fully validated on the way back in because it is
+attacker-controlled and ends up in a query filter. A malformed cursor is
+`VALIDATION_FAILED`, a client mistake, not a server fault.
+
+**A conversation in another workspace is reported as `NOT_FOUND`, never
+`FORBIDDEN`.** "Forbidden" would confirm the id exists and let someone probe for
+other tenants' conversation ids.
+
+A non-uuid identifier fails at parse time in Postgres (`22P02`). That is
+translated to `NOT_FOUND` rather than surfacing as a database fault, so a bad
+link in an email does not look like an outage.
+
+Page size is clamped, so a caller asking for a million rows cannot make the
+database do that much work.
+
 ## Conversations and messages
 
 Implemented in Task 3.2.
