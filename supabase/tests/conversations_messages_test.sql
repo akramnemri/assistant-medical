@@ -11,7 +11,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(30);
+select plan(35);
 
 \set doctor_a_id '11111111-1111-1111-1111-111111111111'
 \set doctor_b_id '22222222-2222-2222-2222-222222222222'
@@ -352,6 +352,53 @@ select is(
   (select count(*) from public.contacts),
   0::bigint,
   'an anonymous caller sees no patient identities'
+);
+
+-- ---------------------------------------------------------------------------
+-- conversation_list view
+-- ---------------------------------------------------------------------------
+
+reset role;
+
+-- THE assertion for this view. A Postgres view runs as its owner by default,
+-- which would execute its reads as the privileged role and bypass RLS
+-- entirely: every doctor would see every other doctor's conversations through
+-- it while the underlying tables stayed correctly locked down.
+select ok(
+  (select 'security_invoker=true' = any (reloptions)
+   from pg_class where oid = 'public.conversation_list'::regclass),
+  'conversation_list is security_invoker, so RLS still applies through it'
+);
+
+select ok(
+  not has_table_privilege('anon', 'public.conversation_list', 'SELECT'),
+  'anon cannot select from the conversation list view'
+);
+
+set local role authenticated;
+set local "request.jwt.claims" to '{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated"}';
+
+select is(
+  (select count(*) from public.conversation_list),
+  2::bigint,
+  'doctor A sees their two conversations through the view'
+);
+
+select isnt(
+  (select last_message_text from public.conversation_list
+   where id = :'conversation_id'::uuid),
+  null,
+  'the view attaches the newest message text'
+);
+
+set local role authenticated;
+set local "request.jwt.claims" to '{"sub":"22222222-2222-2222-2222-222222222222","role":"authenticated"}';
+
+-- If the view were security definer this would return doctor A's rows.
+select is(
+  (select count(*) from public.conversation_list),
+  0::bigint,
+  'doctor B sees nothing through the view'
 );
 
 select * from finish();

@@ -164,6 +164,13 @@ export type Database = {
             foreignKeyName: "messages_conversation_fk";
             columns: ["conversation_id", "workspace_id"];
             isOneToOne: false;
+            referencedRelation: "conversation_list";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "messages_conversation_fk";
+            columns: ["conversation_id", "workspace_id"];
+            isOneToOne: false;
             referencedRelation: "conversations";
             referencedColumns: ["id", "workspace_id"];
           },
@@ -350,7 +357,36 @@ export type Database = {
       };
     };
     Views: {
-      [_ in never]: never;
+      conversation_list: {
+        Row: {
+          contact_id: string | null;
+          contact_profile_name: string | null;
+          contact_wa_id: string | null;
+          id: string | null;
+          last_message_at: string | null;
+          last_message_direction: Database["public"]["Enums"]["message_direction"] | null;
+          last_message_text: string | null;
+          last_message_type: Database["public"]["Enums"]["message_type"] | null;
+          unread_count: number | null;
+          workspace_id: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "conversations_contact_fk";
+            columns: ["contact_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "contacts";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "conversations_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Functions: {
       create_workspace: {
