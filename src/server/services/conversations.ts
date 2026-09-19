@@ -33,6 +33,10 @@ export type ConversationSummary = {
   readonly contactWaId: string;
   readonly lastMessageAt: string | null;
   readonly unreadCount: number;
+  /** Newest message text, or null when there are no messages or it carries none. */
+  readonly lastMessageText: string | null;
+  readonly lastMessageDirection: MessageDirection | null;
+  readonly lastMessageType: MessageType | null;
 };
 
 export type Message = {
@@ -64,9 +68,14 @@ export async function listConversations(
   supabase: Client,
   workspaceId: string,
 ): Promise<ConversationSummary[]> {
+  // Reads the `conversation_list` view, which attaches each conversation's
+  // newest message through a lateral join. Fetching the list and then a message
+  // per row would be an N+1 that grows with the doctor's inbox.
   const { data, error } = await supabase
-    .from("conversations")
-    .select("id, last_message_at, unread_count, contacts (wa_id, profile_name)")
+    .from("conversation_list")
+    .select(
+      "id, last_message_at, unread_count, contact_wa_id, contact_profile_name, last_message_text, last_message_direction, last_message_type",
+    )
     .eq("workspace_id", workspaceId)
     .order("last_message_at", { ascending: false, nullsFirst: false });
 
@@ -75,18 +84,21 @@ export async function listConversations(
   }
 
   return data.flatMap((row) => {
-    // The join is nullable in the generated types although the foreign key
-    // makes it impossible. Skipping beats asserting: a surprising row should
-    // not become a crash on the conversation list.
-    if (row.contacts === null) return [];
+    // Every column of a view is nullable in the generated types. `id` and the
+    // contact identity cannot actually be null, but skipping a surprising row
+    // beats a non-null assertion that crashes the whole inbox.
+    if (row.id === null || row.contact_wa_id === null) return [];
 
     return [
       {
         id: row.id,
-        contactName: row.contacts.profile_name,
-        contactWaId: row.contacts.wa_id,
+        contactName: row.contact_profile_name,
+        contactWaId: row.contact_wa_id,
         lastMessageAt: row.last_message_at,
-        unreadCount: row.unread_count,
+        unreadCount: row.unread_count ?? 0,
+        lastMessageText: row.last_message_text,
+        lastMessageDirection: row.last_message_direction,
+        lastMessageType: row.last_message_type,
       },
     ];
   });
@@ -136,6 +148,11 @@ export async function getConversation(
     contactWaId: data.contacts.wa_id,
     lastMessageAt: data.last_message_at,
     unreadCount: data.unread_count,
+    // The thread view renders the messages themselves, so a preview would be
+    // dead weight here.
+    lastMessageText: null,
+    lastMessageDirection: null,
+    lastMessageType: null,
   };
 }
 
