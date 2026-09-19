@@ -34,6 +34,10 @@ export default defineVitestConfig({
       NEXT_PUBLIC_SUPABASE_URL: localEnv.NEXT_PUBLIC_SUPABASE_URL ?? "",
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
         localEnv.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? "",
+      // The realtime test writes the way the webhook will: with the secret key,
+      // because members have no insert policy on messages.
+      NEXT_PUBLIC_SITE_URL: localEnv.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
+      SUPABASE_SECRET_KEY: localEnv.SUPABASE_SECRET_KEY ?? "",
     },
   },
 });

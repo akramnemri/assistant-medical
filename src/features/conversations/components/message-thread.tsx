@@ -1,11 +1,19 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useCallback, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { MessageBubble } from "@/features/conversations/components/message-bubble";
 import { loadOlderMessagesAction } from "@/features/conversations/actions";
-import { groupByDay, prependOlderMessages } from "@/features/conversations/thread-state";
+import {
+  appendNewerMessages,
+  groupByDay,
+  prependOlderMessages,
+} from "@/features/conversations/thread-state";
+import {
+  useRealtimeMessages,
+  type RealtimeStatus,
+} from "@/features/conversations/use-realtime-messages";
 import type { Message } from "@/server/services/conversations";
 
 /**
@@ -14,6 +22,11 @@ import type { Message } from "@/server/services/conversations";
  * Client component because it accumulates pages as the reader loads history.
  * The first page is rendered on the server and handed in, so the thread is
  * readable before any JavaScript runs.
+ *
+ * New messages arrive over Realtime and append themselves, so a doctor sees a
+ * patient's message without refreshing. They are merged rather than pushed: the
+ * initial server render may already contain a message that also arrives as an
+ * event, and rendering it twice would read as the patient sending it twice.
  *
  * Older messages load on an explicit button rather than a scroll observer:
  * scroll-triggered loading fights the browser's scroll anchoring and jumps the
@@ -35,6 +48,14 @@ export function MessageThread({
   const [cursor, setCursor] = useState(initialCursor);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>("connecting");
+
+  const handleIncoming = useCallback((message: Message) => {
+    setMessages((current) => appendNewerMessages(current, [message]));
+  }, []);
+
+  useRealtimeMessages(conversationId, handleIncoming, setRealtimeStatus);
 
   function loadOlder() {
     if (cursor === null || isPending) return;
@@ -61,7 +82,15 @@ export function MessageThread({
   const groups = groupByDay(messages);
 
   return (
-    <div className="flex flex-col gap-4 px-4 py-4">
+    <div className="flex flex-col gap-4 px-4 py-4" data-realtime-status={realtimeStatus}>
+      {/* A silently dead subscription looks identical to a quiet patient, so
+          the disconnected state is stated rather than left to be inferred. */}
+      {realtimeStatus === "error" ? (
+        <p className="text-muted-foreground text-center text-xs">
+          Live updates are unavailable. Reload to see new messages.
+        </p>
+      ) : null}
+
       {cursor === null ? (
         <p className="text-muted-foreground text-center text-xs">
           Beginning of the conversation
