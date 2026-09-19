@@ -1,14 +1,19 @@
 import Link from "next/link";
 import { MainNav } from "@/components/shared/main-nav";
+import { SignOutButton } from "@/features/auth/components/sign-out-button";
+import { getCurrentUser } from "@/lib/supabase/session";
 
 /**
  * Shared chrome for every authenticated route: a sidebar on desktop, a
  * horizontally scrolling nav on small screens, and the page body.
  *
- * There is no session check here yet. Task 2.2 adds authentication and Next 16's
- * `proxy.ts` will redirect unauthenticated visitors before this renders.
+ * `proxy.ts` has already redirected unauthenticated visitors before this
+ * renders, so the account section is only a display concern here — it is not
+ * the access check.
  */
-export function AppShell({ children }: { children: React.ReactNode }) {
+export async function AppShell({ children }: { children: React.ReactNode }) {
+  const user = await getCurrentUser();
+
   return (
     <div className="flex min-h-dvh flex-col md:flex-row">
       <aside className="bg-sidebar border-border shrink-0 border-b md:w-64 md:border-r md:border-b-0">
@@ -23,6 +28,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="overflow-x-auto">
             <MainNav />
           </div>
+
+          {user === null ? null : (
+            <div className="border-border mt-auto flex flex-col gap-1 border-t pt-4">
+              <p
+                className="text-muted-foreground truncate px-3 text-xs"
+                title={user.email}
+              >
+                {user.email}
+              </p>
+              <SignOutButton />
+            </div>
+          )}
         </div>
       </aside>
 

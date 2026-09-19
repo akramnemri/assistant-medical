@@ -85,8 +85,26 @@ Three independent layers, none of which is trusted alone:
 3. **Row Level Security** in Postgres independently prevents cross-tenant reads
    and writes. Policies are tested for both the allowed and the denied path.
 
-**Not implemented yet — Tasks 2.2 and 2.3.** Today every route is publicly
-reachable, including `/admin`.
+Authentication is implemented (Task 2.2): email/password via Supabase Auth,
+with `src/proxy.ts` redirecting signed-out visitors away from `/dashboard`,
+`/conversations`, `/whatsapp`, `/settings` and `/admin`, and signed-in visitors
+away from the auth pages.
+
+The proxy does two things: it refreshes the session (access tokens expire
+hourly, and a Server Component cannot write the rotated cookie, so without this
+users would be silently signed out), and it gates routing. When it redirects it
+copies the refreshed cookies onto the redirect response — a bare
+`NextResponse.redirect` would discard them.
+
+**Authorization is not implemented — Task 2.3.** Any signed-in user can reach
+every route including `/admin`; there are no workspaces, roles or RLS policies
+yet, because there is no schema to attach them to.
+
+Sign-in deliberately returns the same message for an unknown email and a wrong
+password. Distinguishing them would let anyone test whether a given doctor has
+an account here, which on a medical platform is itself sensitive. The `?next=`
+return path is validated against absolute, scheme-relative and control-character
+URLs, so the sign-in page cannot be turned into an open redirect.
 
 ## WhatsApp integration boundary
 

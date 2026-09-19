@@ -1,27 +1,46 @@
 import { expect, test } from "@playwright/test";
 
 /**
- * Proves every skeleton route actually resolves. A route group folder that is
- * misnamed still compiles but 404s at runtime, which only a real request shows.
+ * Routing behaviour for a signed-out visitor.
+ *
+ * A route-group folder that is misnamed still compiles but 404s at runtime, and
+ * a proxy matcher mistake silently stops protecting a route. Only a real
+ * request against a production build catches either.
  */
-const ROUTES = [
+
+const PUBLIC_ROUTES = [
   { path: "/", heading: /centralize patient conversations/i },
   { path: "/sign-in", heading: /sign in/i },
   { path: "/sign-up", heading: /create account/i },
-  { path: "/dashboard", heading: /dashboard/i },
-  { path: "/conversations", heading: /conversations/i },
-  { path: "/conversations/test-id-123", heading: /^conversation$/i },
-  { path: "/whatsapp", heading: /whatsapp connection/i },
-  { path: "/settings", heading: /settings/i },
-  { path: "/admin", heading: /administration/i },
 ] as const;
 
-for (const route of ROUTES) {
-  test(`${route.path} renders`, async ({ page }) => {
+/** Every route the proxy must keep a signed-out visitor away from. */
+const PROTECTED_ROUTES = [
+  "/dashboard",
+  "/conversations",
+  "/conversations/test-id-123",
+  "/whatsapp",
+  "/settings",
+  "/admin",
+] as const;
+
+for (const route of PUBLIC_ROUTES) {
+  test(`${route.path} is publicly reachable`, async ({ page }) => {
     const response = await page.goto(route.path);
 
     expect(response?.status()).toBe(200);
     await expect(page.getByRole("heading", { name: route.heading })).toBeVisible();
+  });
+}
+
+for (const path of PROTECTED_ROUTES) {
+  test(`${path} redirects a signed-out visitor to sign in`, async ({ page }) => {
+    await page.goto(path);
+
+    await expect(page).toHaveURL(/\/sign-in/);
+    // The originally requested path is preserved so sign-in can return there.
+    expect(new URL(page.url()).searchParams.get("next")).toBe(path);
+    await expect(page.getByRole("heading", { name: /sign in/i })).toBeVisible();
   });
 }
 
@@ -32,28 +51,20 @@ test("an unknown route renders the 404 page", async ({ page }) => {
   await expect(page.getByRole("heading", { name: /page not found/i })).toBeVisible();
 });
 
-test("sidebar navigation moves between workspace routes", async ({ page }) => {
-  await page.goto("/dashboard");
+/**
+ * An open redirect on the sign-in page is a credible phishing primitive: the
+ * URL looks like ours right up to the moment credentials are submitted.
+ */
+test("an external next parameter is not reflected into the form", async ({ page }) => {
+  await page.goto("/sign-in?next=https://evil.example/login");
 
-  // Scoped to the nav landmark: the sidebar's brand link also mentions
-  // "conversations", so a page-wide role query matches two elements.
-  const nav = page.getByRole("navigation", { name: "Main" });
-
-  await nav.getByRole("link", { name: "Conversations" }).click();
-  await expect(page).toHaveURL(/\/conversations$/);
-  await expect(nav.getByRole("link", { name: "Conversations" })).toHaveAttribute(
-    "aria-current",
-    "page",
-  );
-
-  await nav.getByRole("link", { name: "WhatsApp" }).click();
-  await expect(page).toHaveURL(/\/whatsapp$/);
+  const hidden = page.locator('input[name="next"]');
+  await expect(hidden).toHaveValue("/dashboard");
 });
 
 /**
  * The E2E suite runs against a production build, which is exactly where the
- * development-only routes must not be reachable. A gate that is only asserted
- * in unit tests would not catch a build that ships them.
+ * development-only routes must not be reachable.
  */
 test.describe("development-only routes are inert in a production build", () => {
   test("the dev error endpoint returns 404", async ({ request }) => {

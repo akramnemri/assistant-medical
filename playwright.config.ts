@@ -1,6 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const baseURL = process.env.E2E_BASE_URL ?? "http://127.0.0.1:3000";
+// A dedicated port so the suite never collides with — or silently reuses — a
+// `next dev` server the developer has running on 3000.
+const E2E_PORT = process.env.E2E_PORT ?? "3100";
+const baseURL = process.env.E2E_BASE_URL ?? `http://127.0.0.1:${E2E_PORT}`;
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -18,9 +21,11 @@ export default defineConfig({
     // E2E runs against a production build, not `next dev`. The dev server adds
     // an HMR WebSocket and other development-only behaviour that is not what
     // ships, and whose console noise would otherwise mask real page errors.
-    command: "npm run build && npm start",
+    command: `npm run build && npx next start --port ${E2E_PORT}`,
     url: baseURL,
-    reuseExistingServer: !process.env.CI,
-    timeout: 180_000,
+    // Never reuse: an already-running server could be a dev server, which is
+    // exactly what this suite is configured to avoid testing against.
+    reuseExistingServer: false,
+    timeout: 240_000,
   },
 });
