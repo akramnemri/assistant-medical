@@ -35,22 +35,34 @@ cp .env.example .env.local
 ### Local Supabase
 
 Development runs against a local Supabase stack in Docker, not a hosted
-project. Start Docker Desktop, then:
+project.
+
+**Docker Desktop must be running first.** It does not start automatically on
+login, and `npx supabase start` fails with exit code 4 if the daemon is down —
+including if Docker stops midway through the initial image pull.
 
 ```bash
 npx supabase start
 ```
 
-The first run downloads several GB of images and takes a while. When it
-finishes it prints the local URL and keys. Copy them into `.env.local`:
+The first run downloads several GB of images and can take 30+ minutes. Pulled
+images are cached, so an interrupted run resumes rather than starting over.
 
-- `API URL` → `NEXT_PUBLIC_SUPABASE_URL`
-- the publishable / `anon` key → `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
-- the secret / `service_role` key → `SUPABASE_SECRET_KEY` (optional; only
-  needed for features that must bypass Row Level Security)
+The CLI prints both the current key names (`PUBLISHABLE_KEY`, `SECRET_KEY`) and
+the legacy ones (`ANON_KEY`, `SERVICE_ROLE_KEY`). Use the current pair. Map
+them into `.env.local`:
 
-Reprint them at any time with `npx supabase status`, and stop the stack with
-`npx supabase stop`. Supabase Studio runs at <http://127.0.0.1:54323>.
+| `supabase status` | `.env.local`                                                              |
+| ----------------- | ------------------------------------------------------------------------- |
+| `API_URL`         | `NEXT_PUBLIC_SUPABASE_URL`                                                |
+| `PUBLISHABLE_KEY` | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`                                    |
+| `SECRET_KEY`      | `SUPABASE_SECRET_KEY` (optional — only for features that must bypass RLS) |
+
+`npx supabase status -o env` prints them in env format, and
+`--override-name api.url=NEXT_PUBLIC_SUPABASE_URL` renames a key on the way out.
+
+Stop the stack with `npx supabase stop`. Supabase Studio runs at
+<http://127.0.0.1:54323> and local mail at <http://127.0.0.1:54324>.
 
 ### Run the app
 
