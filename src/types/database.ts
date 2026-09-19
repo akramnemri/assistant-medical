@@ -53,6 +53,97 @@ export type Database = {
         };
         Relationships: [];
       };
+      whatsapp_connection_secrets: {
+        Row: {
+          access_token: string;
+          connection_id: string;
+          created_at: string;
+          token_expires_at: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          access_token: string;
+          connection_id: string;
+          created_at?: string;
+          token_expires_at?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          access_token?: string;
+          connection_id?: string;
+          created_at?: string;
+          token_expires_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_connection_secrets_connection_id_fkey";
+            columns: ["connection_id"];
+            isOneToOne: true;
+            referencedRelation: "whatsapp_connections";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      whatsapp_connections: {
+        Row: {
+          connected_at: string | null;
+          created_at: string;
+          disconnected_at: string | null;
+          display_phone_number: string | null;
+          error_at: string | null;
+          error_code: string | null;
+          error_message: string | null;
+          id: string;
+          phone_number_id: string | null;
+          status: Database["public"]["Enums"]["whatsapp_connection_status"];
+          updated_at: string;
+          verified_name: string | null;
+          waba_id: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          connected_at?: string | null;
+          created_at?: string;
+          disconnected_at?: string | null;
+          display_phone_number?: string | null;
+          error_at?: string | null;
+          error_code?: string | null;
+          error_message?: string | null;
+          id?: string;
+          phone_number_id?: string | null;
+          status?: Database["public"]["Enums"]["whatsapp_connection_status"];
+          updated_at?: string;
+          verified_name?: string | null;
+          waba_id?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          connected_at?: string | null;
+          created_at?: string;
+          disconnected_at?: string | null;
+          display_phone_number?: string | null;
+          error_at?: string | null;
+          error_code?: string | null;
+          error_message?: string | null;
+          id?: string;
+          phone_number_id?: string | null;
+          status?: Database["public"]["Enums"]["whatsapp_connection_status"];
+          updated_at?: string;
+          verified_name?: string | null;
+          waba_id?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_connections_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       workspace_members: {
         Row: {
           created_at: string;
@@ -143,6 +234,7 @@ export type Database = {
       };
     };
     Enums: {
+      whatsapp_connection_status: "pending" | "connected" | "disconnected" | "error";
       workspace_role: "owner" | "admin" | "member";
     };
     CompositeTypes: {
@@ -270,6 +362,7 @@ export const Constants = {
   },
   public: {
     Enums: {
+      whatsapp_connection_status: ["pending", "connected", "disconnected", "error"],
       workspace_role: ["owner", "admin", "member"],
     },
   },

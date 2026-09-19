@@ -3,10 +3,25 @@
 A multi-tenant SaaS application that lets doctors centralize and manage patient
 conversations received through WhatsApp.
 
-> **Status: Phase 2 complete — tenant model.** Tooling, routes, the Supabase
-> layer, email/password sign-in and the workspace/tenant schema with Row Level
-> Security all exist. The WhatsApp integration is not implemented yet, and
+> **Status: Phase 3 — conversation database foundation.** Tooling, routes, the
+> Supabase layer, email/password sign-in, the workspace/tenant schema and the
+> WhatsApp connection model all exist. No real WhatsApp traffic flows yet, and
 > `/admin` is still reachable by any signed-in user.
+
+### Local development accounts
+
+>
+
+`npm run db:reset` re-creates two synthetic accounts from `supabase/seed.sql`:
+
+| Account                 | Password         | WhatsApp connection      |
+| ----------------------- | ---------------- | ------------------------ |
+| `doctor-a@example.test` | `devpassword123` | connected                |
+| `doctor-b@example.test` | `devpassword123` | pending (mid-onboarding) |
+
+Two accounts, because tenant isolation cannot be checked by hand with one. Both
+are synthetic and local-only — never put a real address or a reused password in
+that file, it is committed.
 
 ## Stack
 
