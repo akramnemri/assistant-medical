@@ -134,6 +134,10 @@ from public.whatsapp_connections c
 where c.phone_number_id = 'SYNTHETIC_PHONE_ID_A';
 
 -- A thread long enough to page through, alternating direction.
+--
+-- 70 messages against a default page size of 30, so the UI genuinely paginates
+-- rather than fitting everything in one page and leaving the cursor path
+-- untested by hand. Spread over several days so the date separators appear too.
 insert into public.messages
   (workspace_id, conversation_id, direction, message_type,
    provider_message_id, text_body, delivery_status, sent_at)
@@ -145,9 +149,9 @@ select
   'wamid.SYNTHETIC.' || n,
   'Synthetic test message number ' || n,
   case when n % 2 = 0 then null else 'delivered' end::public.message_delivery_status,
-  now() - ((30 - n) * interval '10 minutes')
+  now() - ((70 - n) * interval '90 minutes')
 from public.conversations conv,
-     generate_series(1, 24) as n
+     generate_series(1, 70) as n
 where conv.id = '55555555-5555-5555-5555-555555555555';
 
 -- Three messages sharing one timestamp, because Meta's timestamps have
