@@ -90,3 +90,101 @@ insert into public.whatsapp_connection_secrets (connection_id, access_token)
 select c.id, 'SYNTHETIC_TOKEN_NOT_A_REAL_CREDENTIAL'
 from public.whatsapp_connections c
 where c.phone_number_id = 'SYNTHETIC_PHONE_ID_A';
+
+-- ---------------------------------------------------------------------------
+-- Synthetic conversations and messages
+-- ---------------------------------------------------------------------------
+-- Entirely invented. No real phone number, name, or medical content belongs in
+-- this file. The numbers below are in the 555-01xx range, reserved for fiction.
+
+insert into public.contacts (id, workspace_id, wa_id, profile_name)
+select
+  '33333333-3333-3333-3333-333333333333',
+  wm.workspace_id,
+  '15550000001',
+  'Sam Patient (synthetic)'
+from public.workspace_members wm
+where wm.user_id = '11111111-1111-1111-1111-111111111111';
+
+insert into public.contacts (id, workspace_id, wa_id, profile_name)
+select
+  '44444444-4444-4444-4444-444444444444',
+  wm.workspace_id,
+  '15550000002',
+  'Alex Patient (synthetic)'
+from public.workspace_members wm
+where wm.user_id = '11111111-1111-1111-1111-111111111111';
+
+insert into public.conversations (id, workspace_id, connection_id, contact_id)
+select
+  '55555555-5555-5555-5555-555555555555',
+  c.workspace_id,
+  c.id,
+  '33333333-3333-3333-3333-333333333333'
+from public.whatsapp_connections c
+where c.phone_number_id = 'SYNTHETIC_PHONE_ID_A';
+
+insert into public.conversations (id, workspace_id, connection_id, contact_id)
+select
+  '66666666-6666-6666-6666-666666666666',
+  c.workspace_id,
+  c.id,
+  '44444444-4444-4444-4444-444444444444'
+from public.whatsapp_connections c
+where c.phone_number_id = 'SYNTHETIC_PHONE_ID_A';
+
+-- A thread long enough to page through, alternating direction.
+insert into public.messages
+  (workspace_id, conversation_id, direction, message_type,
+   provider_message_id, text_body, delivery_status, sent_at)
+select
+  conv.workspace_id,
+  conv.id,
+  case when n % 2 = 0 then 'inbound' else 'outbound' end::public.message_direction,
+  'text'::public.message_type,
+  'wamid.SYNTHETIC.' || n,
+  'Synthetic test message number ' || n,
+  case when n % 2 = 0 then null else 'delivered' end::public.message_delivery_status,
+  now() - ((30 - n) * interval '10 minutes')
+from public.conversations conv,
+     generate_series(1, 24) as n
+where conv.id = '55555555-5555-5555-5555-555555555555';
+
+-- Three messages sharing one timestamp, because Meta's timestamps have
+-- one-second resolution. A cursor that pages on sent_at alone will skip or
+-- repeat these; this data makes that bug reproducible instead of intermittent.
+insert into public.messages
+  (workspace_id, conversation_id, direction, message_type,
+   provider_message_id, text_body, sent_at)
+select
+  conv.workspace_id,
+  conv.id,
+  'inbound'::public.message_direction,
+  'text'::public.message_type,
+  'wamid.SYNTHETIC.SAMETIME.' || n,
+  'Synthetic burst message ' || n,
+  date_trunc('second', now())
+from public.conversations conv,
+     generate_series(1, 3) as n
+where conv.id = '55555555-5555-5555-5555-555555555555';
+
+-- A quieter second thread, plus one unsupported type so the UI has to cope.
+insert into public.messages
+  (workspace_id, conversation_id, direction, message_type,
+   provider_message_id, text_body, sent_at)
+select
+  conv.workspace_id, conv.id, 'inbound'::public.message_direction,
+  'text'::public.message_type, 'wamid.SYNTHETIC.B1',
+  'Synthetic message in the second thread', now() - interval '2 days'
+from public.conversations conv
+where conv.id = '66666666-6666-6666-6666-666666666666';
+
+insert into public.messages
+  (workspace_id, conversation_id, direction, message_type,
+   provider_message_id, text_body, sent_at)
+select
+  conv.workspace_id, conv.id, 'inbound'::public.message_direction,
+  'unsupported'::public.message_type, 'wamid.SYNTHETIC.B2',
+  null, now() - interval '1 day'
+from public.conversations conv
+where conv.id = '66666666-6666-6666-6666-666666666666';
