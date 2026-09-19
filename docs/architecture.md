@@ -71,9 +71,17 @@ RLS policy can be written without guesswork. Provider identifiers (phone number
 ID, WABA ID, provider message ID) are stored as provider identifiers — never as
 the application's own primary keys.
 
-Three tables exist today: `profiles` (1:1 with `auth.users`), `workspaces` (the
-tenant boundary) and `workspace_members` (membership plus role, keyed on
-`(workspace_id, user_id)` so duplicate membership is unrepresentable).
+Tables today: `profiles` (1:1 with `auth.users`), `workspaces` (the tenant
+boundary), `workspace_members` (membership plus role, keyed on
+`(workspace_id, user_id)` so duplicate membership is unrepresentable),
+`whatsapp_connections` + `whatsapp_connection_secrets`, and the conversation
+tables `contacts`, `conversations` and `messages`.
+
+`workspace_id` is denormalised onto conversations and messages so RLS can
+filter without a join. **Composite foreign keys make that copy unforgeable**: a
+message references `(conversation_id, workspace_id)` against a matching unique
+key on conversations, so a row claiming a workspace that does not own its parent
+is rejected with a foreign-key violation rather than quietly stored.
 
 **Provisioning is a database trigger, not application code.** `handle_new_user`
 creates the profile, a workspace and the owner membership inside the same
@@ -224,6 +232,41 @@ Meta retries deliveries, so the provider message ID is the idempotency boundary
 and is enforced by a unique constraint rather than by application logic alone.
 Unknown event and message types are recorded and safely ignored — one
 unrecognized payload must not take down the pipeline.
+
+## Conversations and messages
+
+Implemented in Task 3.2.
+
+**Idempotency** is a partial unique index on `messages.provider_message_id`. A
+duplicate delivery raises `23505`, which the webhook will treat as "already
+processed". A handler that checked for existence first and then inserted would
+race against its own retry; a constraint cannot be raced. The index is partial
+because an outbound message has no provider id until the provider accepts it.
+
+**Ordering uses `(sent_at, id)`, never `sent_at` alone.** Meta's timestamps have
+one-second resolution, so several messages routinely share one — a cursor on the
+timestamp alone would skip or repeat rows at a page boundary. The seed
+deliberately contains three messages sharing a timestamp so that bug is
+reproducible rather than intermittent, and a test asserts two keyset pages do
+not overlap.
+
+`sent_at` (what the provider reports) is kept distinct from `created_at` (when we
+stored it). They differ by however long delivery and retries took, and only the
+provider's timestamp orders a thread correctly.
+
+**Conversation summaries are maintained by trigger**, not by the webhook
+handler, so `last_message_at` and `unread_count` cannot drift when a message is
+inserted by a backfill or a test. `last_message_at` uses `greatest()`, so a
+late-arriving older delivery cannot drag a thread backwards in the list.
+
+A contact is scoped to a workspace: the same person messaging two doctors is two
+contacts, so one tenant's patient list can never be inferred from another's.
+`unread_count` is workspace-level, which is correct while a workspace has one
+doctor and becomes wrong — not merely incomplete — once team members exist.
+
+Messages store normalised fields only. The raw provider payload belongs with the
+webhook event record, which has its own retention story, rather than duplicating
+patient content on every message row.
 
 ## Errors and observability
 

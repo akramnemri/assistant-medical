@@ -29,6 +29,153 @@ export type Database = {
   };
   public: {
     Tables: {
+      contacts: {
+        Row: {
+          created_at: string;
+          id: string;
+          profile_name: string | null;
+          updated_at: string;
+          wa_id: string;
+          workspace_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          profile_name?: string | null;
+          updated_at?: string;
+          wa_id: string;
+          workspace_id: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          profile_name?: string | null;
+          updated_at?: string;
+          wa_id?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "contacts_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      conversations: {
+        Row: {
+          connection_id: string;
+          contact_id: string;
+          created_at: string;
+          id: string;
+          last_message_at: string | null;
+          unread_count: number;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          connection_id: string;
+          contact_id: string;
+          created_at?: string;
+          id?: string;
+          last_message_at?: string | null;
+          unread_count?: number;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          connection_id?: string;
+          contact_id?: string;
+          created_at?: string;
+          id?: string;
+          last_message_at?: string | null;
+          unread_count?: number;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "conversations_connection_fk";
+            columns: ["connection_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "whatsapp_connections";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "conversations_contact_fk";
+            columns: ["contact_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "contacts";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "conversations_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      messages: {
+        Row: {
+          conversation_id: string;
+          created_at: string;
+          delivery_status: Database["public"]["Enums"]["message_delivery_status"] | null;
+          direction: Database["public"]["Enums"]["message_direction"];
+          failure_reason: string | null;
+          id: string;
+          message_type: Database["public"]["Enums"]["message_type"];
+          provider_message_id: string | null;
+          sent_at: string;
+          text_body: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          conversation_id: string;
+          created_at?: string;
+          delivery_status?: Database["public"]["Enums"]["message_delivery_status"] | null;
+          direction: Database["public"]["Enums"]["message_direction"];
+          failure_reason?: string | null;
+          id?: string;
+          message_type?: Database["public"]["Enums"]["message_type"];
+          provider_message_id?: string | null;
+          sent_at: string;
+          text_body?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          conversation_id?: string;
+          created_at?: string;
+          delivery_status?: Database["public"]["Enums"]["message_delivery_status"] | null;
+          direction?: Database["public"]["Enums"]["message_direction"];
+          failure_reason?: string | null;
+          id?: string;
+          message_type?: Database["public"]["Enums"]["message_type"];
+          provider_message_id?: string | null;
+          sent_at?: string;
+          text_body?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "messages_conversation_fk";
+            columns: ["conversation_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "conversations";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "messages_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       profiles: {
         Row: {
           created_at: string;
@@ -234,6 +381,18 @@ export type Database = {
       };
     };
     Enums: {
+      message_delivery_status: "pending" | "sent" | "delivered" | "read" | "failed";
+      message_direction: "inbound" | "outbound";
+      message_type:
+        | "text"
+        | "image"
+        | "audio"
+        | "video"
+        | "document"
+        | "sticker"
+        | "location"
+        | "contacts"
+        | "unsupported";
       whatsapp_connection_status: "pending" | "connected" | "disconnected" | "error";
       workspace_role: "owner" | "admin" | "member";
     };
@@ -362,6 +521,19 @@ export const Constants = {
   },
   public: {
     Enums: {
+      message_delivery_status: ["pending", "sent", "delivered", "read", "failed"],
+      message_direction: ["inbound", "outbound"],
+      message_type: [
+        "text",
+        "image",
+        "audio",
+        "video",
+        "document",
+        "sticker",
+        "location",
+        "contacts",
+        "unsupported",
+      ],
       whatsapp_connection_status: ["pending", "connected", "disconnected", "error"],
       workspace_role: ["owner", "admin", "member"],
     },
