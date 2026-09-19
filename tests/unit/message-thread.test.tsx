@@ -15,6 +15,16 @@ vi.mock("@/features/conversations/actions", () => ({
   loadOlderMessagesAction: loadOlder,
 }));
 
+/**
+ * Realtime is mocked too. It opens a websocket and needs Supabase
+ * configuration, neither of which this file is testing — what matters here is
+ * how the thread merges and renders messages. Delivery itself is covered by an
+ * integration test against the real stack.
+ */
+vi.mock("@/features/conversations/use-realtime-messages", () => ({
+  useRealtimeMessages: () => undefined,
+}));
+
 function messageOf(id: string, overrides: Partial<Message> = {}): Message {
   return {
     id,

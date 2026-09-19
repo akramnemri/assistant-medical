@@ -16,7 +16,13 @@ const DOCTOR_B = { email: "doctor-b@example.test", password: "devpassword123" };
 
 /** Doctor A's seeded thread: 70 messages plus a 3-message same-second burst. */
 const CONVERSATION_A = "55555555-5555-5555-5555-555555555555";
-const TOTAL_MESSAGES = 73;
+
+/**
+ * The seed guarantees at least this many. An exact count would be wrong: the
+ * realtime integration tests add messages to this same local database, so the
+ * property worth asserting is "every message exactly once", not a fixed total.
+ */
+const MINIMUM_MESSAGES = 73;
 
 test.beforeAll(async ({ request }) => {
   const response = await request.get(`${SUPABASE_URL}/auth/v1/health`).catch(() => null);
@@ -104,7 +110,8 @@ test("loading the whole history yields every message exactly once", async ({ pag
 
   const messages = await renderedMessages(page);
 
-  expect(messages).toHaveLength(TOTAL_MESSAGES);
+  expect(messages.length).toBeGreaterThanOrEqual(MINIMUM_MESSAGES);
+  // No message rendered twice, and the walk reached the very first one.
   expect(new Set(messages).size).toBe(messages.length);
   expect(messages[0]).toContain("number 1");
 });
