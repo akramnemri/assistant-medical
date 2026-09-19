@@ -1,8 +1,13 @@
 import { fileURLToPath } from "node:url";
-import { defineConfig } from "vitest/config";
+import { loadEnv } from "vite";
+import { defineConfig as defineVitestConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
-export default defineConfig({
+// Integration tests talk to the local Supabase stack, so they need the same
+// configuration the app uses. Vitest does not read .env.local on its own.
+const localEnv = loadEnv("development", process.cwd(), "");
+
+export default defineVitestConfig({
   plugins: [react()],
   resolve: {
     // Resolves the "@/*" alias from tsconfig.json so tests import modules the
@@ -25,5 +30,10 @@ export default defineConfig({
     // Playwright owns tests/e2e; Vitest must not try to collect those specs.
     include: ["tests/unit/**/*.test.{ts,tsx}", "tests/integration/**/*.test.{ts,tsx}"],
     css: false,
+    env: {
+      NEXT_PUBLIC_SUPABASE_URL: localEnv.NEXT_PUBLIC_SUPABASE_URL ?? "",
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
+        localEnv.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? "",
+    },
   },
 });

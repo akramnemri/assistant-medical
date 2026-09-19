@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import { requireCurrentUser } from "@/lib/supabase/session";
-import { getCurrentWorkspace } from "@/server/services/workspaces";
+import { getRequestContext } from "@/server/request-context";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
@@ -8,10 +7,7 @@ export default async function DashboardPage() {
   // `proxy.ts` already redirected unauthenticated visitors, but this page reads
   // user data, so it derives both the user and the workspace from the session
   // rather than trusting that the proxy ran.
-  const [user, workspace] = await Promise.all([
-    requireCurrentUser(),
-    getCurrentWorkspace(),
-  ]);
+  const { user, workspace } = await getRequestContext();
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-10">

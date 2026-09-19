@@ -1,13 +1,15 @@
-import "server-only";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { AppError, ERROR_CODES } from "@/lib/errors/app-error";
 import { logger } from "@/lib/logger/logger";
 import type { Database } from "@/types/database";
 
+type Client = SupabaseClient<Database>;
+
 /**
  * Reads of a workspace's WhatsApp connection state.
  *
- * Uses the RLS-bound server client, so a member only ever sees their own
+ * The Supabase client is passed in so these can be tested without a request
+ * context. It is expected to be RLS-bound, so a member only ever sees their own
  * workspace's rows even if a query here were wrong.
  *
  * Writes are deliberately absent. Creating and transitioning a connection
@@ -56,10 +58,9 @@ export function isUsable(connection: WhatsAppConnection): boolean {
  * unchecked id would still be a bug worth catching in review.
  */
 export async function listWorkspaceConnections(
+  supabase: Client,
   workspaceId: string,
 ): Promise<WhatsAppConnection[]> {
-  const supabase = await createSupabaseServerClient();
-
   const { data, error } = await supabase
     .from("whatsapp_connections")
     .select(
@@ -105,9 +106,10 @@ export async function listWorkspaceConnections(
  * state rather than whatever happens to be newest.
  */
 export async function getActiveConnection(
+  supabase: Client,
   workspaceId: string,
 ): Promise<WhatsAppConnection | null> {
-  const connections = await listWorkspaceConnections(workspaceId);
+  const connections = await listWorkspaceConnections(supabase, workspaceId);
 
   return (
     connections.find((connection) => connection.status === "connected") ??
