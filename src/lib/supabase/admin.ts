@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { clientEnv } from "@/lib/config/client-env";
 import { serverEnv } from "@/lib/config/server-env";
 import { AppError, ERROR_CODES } from "@/lib/errors/app-error";
+import type { Database } from "@/types/database";
 
 /**
  * Privileged Supabase client. **Bypasses Row Level Security entirely.**
@@ -36,7 +37,7 @@ export function createSupabaseAdminClient() {
     );
   }
 
-  return createClient(clientEnv().NEXT_PUBLIC_SUPABASE_URL, secretKey, {
+  return createClient<Database>(clientEnv().NEXT_PUBLIC_SUPABASE_URL, secretKey, {
     auth: {
       // There is no user session here and nothing to refresh. Persisting one
       // would risk this privileged client adopting a user's identity.

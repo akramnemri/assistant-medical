@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { clientEnv } from "@/lib/config/client-env";
+import type { Database } from "@/types/database";
 import { DEFAULT_SIGNED_IN_PATH, NEXT_PARAM } from "@/features/auth/redirects";
 
 /**
@@ -44,7 +45,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   // Reassigned by `setAll` below whenever Supabase rotates the session cookies.
   let response = NextResponse.next({ request });
 
-  const supabase = createServerClient(
+  const supabase = createServerClient<Database>(
     env.NEXT_PUBLIC_SUPABASE_URL,
     env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
     {

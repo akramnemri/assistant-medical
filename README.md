@@ -3,10 +3,10 @@
 A multi-tenant SaaS application that lets doctors centralize and manage patient
 conversations received through WhatsApp.
 
-> **Status: Phase 2 — authentication.** Tooling, the route structure, the
-> Supabase client/config layer and email/password sign-in exist. The database
-> schema, workspaces/roles and the WhatsApp integration are not implemented
-> yet, so any signed-in user can reach every route including `/admin`.
+> **Status: Phase 2 complete — tenant model.** Tooling, routes, the Supabase
+> layer, email/password sign-in and the workspace/tenant schema with Row Level
+> Security all exist. The WhatsApp integration is not implemented yet, and
+> `/admin` is still reachable by any signed-in user.
 
 ## Stack
 

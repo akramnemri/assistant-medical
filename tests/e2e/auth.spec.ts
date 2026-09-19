@@ -51,6 +51,13 @@ test("a doctor can register, stay signed in across a reload, and sign out", asyn
   await expect(page).toHaveURL(/\/dashboard$/);
   await expect(page.getByRole("main").getByText(email)).toBeVisible();
 
+  // Sign-up provisions a workspace in the same transaction as the user, so a
+  // brand new account must already have one and own it.
+  await expect(page.getByRole("main")).toContainText("workspace");
+  // The role is stored lowercase and only capitalised by CSS, so the DOM text
+  // is "owner" regardless of how it looks on screen.
+  await expect(page.getByRole("main")).toContainText(/owner/i);
+
   // Session persistence: the cookie survives a full reload, not just client
   // state held in memory.
   await page.reload();
