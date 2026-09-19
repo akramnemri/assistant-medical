@@ -147,6 +147,40 @@ an account here, which on a medical platform is itself sensitive. The `?next=`
 return path is validated against absolute, scheme-relative and control-character
 URLs, so the sign-in page cannot be turned into an open redirect.
 
+## WhatsApp connection model
+
+Implemented in Task 3.1. A connection is a **lifecycle**, not "a phone number
+plus a token": onboarding can be half-finished, Meta can revoke access without
+telling us, and a disconnected number can be reconnected later. A nullable token
+cannot distinguish "never started" from "in progress" from "deliberately
+disconnected" from "broken" — which is exactly the distinction support needs.
+
+Status is an enum (`pending`, `connected`, `disconnected`, `error`) and
+transitions are enforced by a trigger, because the onboarding callback, the
+webhook and future admin tooling all write that column. A rule enforced in one
+of three writers holds two thirds of the time.
+
+Two check constraints stop an unusable row being marked usable: `connected`
+requires both provider identifiers, and `error` requires a reason.
+
+**Credentials are in a separate table**, `whatsapp_connection_secrets`, with RLS
+enabled and **no policies at all** — plus privileges revoked from `anon` and
+`authenticated`. That combination leaves it reachable only by `service_role`
+from trusted server code. Keeping the token on the connection row would mean one
+careless `select *` in a server component ships a Meta access token to the
+browser. A pgTAP test asserts the policy count is zero, so adding one later has
+to be a deliberate act.
+
+**A live number belongs to exactly one workspace**, enforced by a partial unique
+index on `phone_number_id` scoped to active statuses. Without it two workspaces
+could both claim a number and inbound messages would route to whichever row was
+found first — a cross-tenant leak no RLS policy would catch, because both rows
+are legitimately owned. Scoping to active statuses means a released number can
+still be connected elsewhere later.
+
+There is no RLS write policy: connections are created and transitioned by
+server-side code holding the secret key, never by the browser.
+
 ## WhatsApp integration boundary
 
 **Not implemented yet — Phase 5 onward.**

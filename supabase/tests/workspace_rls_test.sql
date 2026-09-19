@@ -28,9 +28,13 @@ select plan(29);
 -- ---------------------------------------------------------------------------
 -- All data is synthetic. `.test` is reserved by RFC 2606 and cannot route to a
 -- real mailbox.
+--
+-- These ids and addresses deliberately differ from the ones in seed.sql, which
+-- has already run against this database: reusing them collides on the primary
+-- key and the test fails for a reason that has nothing to do with RLS.
 
-\set doctor_a_id '11111111-1111-1111-1111-111111111111'
-\set doctor_b_id '22222222-2222-2222-2222-222222222222'
+\set doctor_a_id 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+\set doctor_b_id 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'
 
 insert into auth.users
   (instance_id, id, aud, role, email, encrypted_password,
@@ -38,10 +42,10 @@ insert into auth.users
    raw_app_meta_data, raw_user_meta_data)
 values
   ('00000000-0000-0000-0000-000000000000', :'doctor_a_id', 'authenticated',
-   'authenticated', 'doctor-a@example.test', 'synthetic-not-a-real-hash',
+   'authenticated', 'rls-a@example.test', 'synthetic-not-a-real-hash',
    now(), now(), now(), '{}'::jsonb, '{}'::jsonb),
   ('00000000-0000-0000-0000-000000000000', :'doctor_b_id', 'authenticated',
-   'authenticated', 'doctor-b@example.test', 'synthetic-not-a-real-hash',
+   'authenticated', 'rls-b@example.test', 'synthetic-not-a-real-hash',
    now(), now(), now(), '{}'::jsonb, '{}'::jsonb);
 
 -- Captured while still privileged, so the cross-tenant attempts below can name
@@ -106,7 +110,7 @@ select isnt(
 -- ---------------------------------------------------------------------------
 
 set local role authenticated;
-set local "request.jwt.claims" to '{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated"}';
+set local "request.jwt.claims" to '{"sub":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","role":"authenticated"}';
 
 select is(
   (select count(*) from public.workspaces),
@@ -122,7 +126,7 @@ select is(
 
 select is(
   (select email from public.profiles),
-  'doctor-a@example.test',
+  'rls-a@example.test',
   'the profile doctor A sees is their own'
 );
 
@@ -172,7 +176,7 @@ select throws_ok(
 
 select throws_ok(
   $$insert into public.profiles (id, email)
-    values ('33333333-3333-3333-3333-333333333333', 'intruder@example.test')$$,
+    values ('cccccccc-cccc-cccc-cccc-cccccccccccc', 'intruder@example.test')$$,
   '42501',
   null,
   'a profile cannot be created by a direct insert'
@@ -197,7 +201,7 @@ delete from public.workspaces where id = :'b_workspace_id'::uuid;
 
 select lives_ok(
   $$update public.profiles set full_name = 'Doctor A'
-    where id = '11111111-1111-1111-1111-111111111111'$$,
+    where id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'$$,
   'doctor A can update their own profile'
 );
 
