@@ -3,9 +3,10 @@
 A multi-tenant SaaS application that lets doctors centralize and manage patient
 conversations received through WhatsApp.
 
-> **Status: Phase 1 — application skeleton.** Tooling and the route structure
-> exist. Authentication, the database schema, and the WhatsApp integration are
-> not implemented yet, and no route is access-controlled.
+> **Status: Phase 2 — Supabase foundation.** Tooling, the route structure and
+> the Supabase client/config layer exist. Authentication, the database schema
+> and the WhatsApp integration are not implemented yet, and no route is
+> access-controlled.
 
 ## Stack
 
@@ -29,13 +30,49 @@ conversations received through WhatsApp.
 ```bash
 npm install
 cp .env.example .env.local
+```
+
+### Local Supabase
+
+Development runs against a local Supabase stack in Docker, not a hosted
+project.
+
+**Docker Desktop must be running first.** It does not start automatically on
+login, and `npx supabase start` fails with exit code 4 if the daemon is down —
+including if Docker stops midway through the initial image pull.
+
+```bash
+npx supabase start
+```
+
+The first run downloads several GB of images and can take 30+ minutes. Pulled
+images are cached, so an interrupted run resumes rather than starting over.
+
+The CLI prints both the current key names (`PUBLISHABLE_KEY`, `SECRET_KEY`) and
+the legacy ones (`ANON_KEY`, `SERVICE_ROLE_KEY`). Use the current pair. Map
+them into `.env.local`:
+
+| `supabase status` | `.env.local`                                                              |
+| ----------------- | ------------------------------------------------------------------------- |
+| `API_URL`         | `NEXT_PUBLIC_SUPABASE_URL`                                                |
+| `PUBLISHABLE_KEY` | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`                                    |
+| `SECRET_KEY`      | `SUPABASE_SECRET_KEY` (optional — only for features that must bypass RLS) |
+
+`npx supabase status -o env` prints them in env format, and
+`--override-name api.url=NEXT_PUBLIC_SUPABASE_URL` renames a key on the way out.
+
+Stop the stack with `npx supabase stop`. Supabase Studio runs at
+<http://127.0.0.1:54323> and local mail at <http://127.0.0.1:54324>.
+
+### Run the app
+
+```bash
 npm run dev
 ```
 
-The app runs at <http://localhost:3000>.
-
-No Supabase or Meta credentials are needed to run the Phase 0 baseline. The
-placeholders in `.env.example` become required as later phases land.
+The app runs at <http://localhost:3000>. In development,
+<http://localhost:3000/api/dev/supabase> reports whether configuration parsed
+and the local stack is reachable.
 
 ## Commands
 
@@ -61,8 +98,15 @@ a one-time `npx playwright install chromium`.
 See `.env.example` for the authoritative list. The split that matters:
 
 - **`NEXT_PUBLIC_*`** is inlined into the browser bundle. Non-secret values only.
+  The Supabase publishable key belongs here and is safe there _only_ because RLS
+  is enforced.
 - **Everything else is server-only.** `SUPABASE_SECRET_KEY` bypasses Row Level
-  Security and must never be imported from a client component.
+  Security. Modules that read it import `server-only`, so importing one from a
+  client component fails the build rather than shipping a secret.
+
+Configuration is validated at startup with zod. A missing or malformed variable
+fails with a message naming it, instead of surfacing later as a confusing
+runtime error.
 
 Never commit a filled-in `.env.local`. `.gitignore` blocks all `.env*` files
 except the template.

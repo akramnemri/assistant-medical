@@ -212,8 +212,50 @@ Two categories, split by prefix:
 except that template. Real credentials are never committed, and production
 secrets are never copied into source or local files.
 
-Configuration is validated at runtime (Task 2.1) so a missing variable fails
-loudly at startup instead of producing a confusing error later.
+Configuration is validated with zod and split across two modules:
+
+- `src/lib/config/client-env.ts` — public values, safe anywhere. The
+  `process.env.NEXT_PUBLIC_*` reads are written out literally, because Next only
+  inlines them into the browser bundle in that form.
+- `src/lib/config/server-env.ts` — starts with `import "server-only"`, so
+  importing it from a client component **fails the build**. That is a build-time
+  guarantee rather than a review convention.
+
+Validation reports every invalid variable at once and points at `.env.example`.
+An optional variable set to `""` — which is how the template ships — is treated
+as unset.
+
+## Supabase clients
+
+Three clients, with deliberately different privileges. Choosing the wrong one is
+the easiest way to break tenant isolation, so the distinction is explicit.
+
+| Client  | Module               | Key         | RLS          |
+| ------- | -------------------- | ----------- | ------------ |
+| Browser | `supabase/client.ts` | publishable | **enforced** |
+| Server  | `supabase/server.ts` | publishable | **enforced** |
+| Admin   | `supabase/admin.ts`  | secret      | **bypassed** |
+
+The server client uses the _publishable_ key on purpose: it acts as the
+signed-in user, so server-side code is not automatically privileged and a wrong
+query still cannot read another workspace's rows.
+
+The admin client exists for operations with no user session to act on behalf
+of — chiefly the Meta webhook, which is authenticated by signature and must
+write a message for a workspace nobody is signed in to. Every call site needs a
+comment justifying why the RLS-bound client is insufficient. It throws
+`CONFIGURATION_ERROR` when the secret key is absent rather than silently falling
+back, which would look like it worked while quietly being subject to policies.
+
+Clients are created per request, never held as module-level singletons: a shared
+instance would leak one user's auth state into another request during
+server-side rendering.
+
+**Session helpers** (`supabase/session.ts`) always use `auth.getUser()`, never
+`auth.getSession()`. `getSession()` returns whatever is in the cookie without
+verifying it against the auth server, so a forged or stale cookie would be
+trusted. On the server, where the answer decides what data a request may read,
+only the revalidated result is safe to act on.
 
 ## Testing layers
 
