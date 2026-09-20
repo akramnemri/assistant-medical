@@ -298,6 +298,56 @@ export type Database = {
           },
         ];
       };
+      whatsapp_webhook_events: {
+        Row: {
+          connection_id: string | null;
+          error_code: string | null;
+          error_message: string | null;
+          id: string;
+          payload: Json;
+          payload_hash: string;
+          phone_number_id: string | null;
+          processed_at: string | null;
+          received_at: string;
+          status: Database["public"]["Enums"]["webhook_event_status"];
+          workspace_id: string | null;
+        };
+        Insert: {
+          connection_id?: string | null;
+          error_code?: string | null;
+          error_message?: string | null;
+          id?: string;
+          payload: Json;
+          payload_hash: string;
+          phone_number_id?: string | null;
+          processed_at?: string | null;
+          received_at?: string;
+          status?: Database["public"]["Enums"]["webhook_event_status"];
+          workspace_id?: string | null;
+        };
+        Update: {
+          connection_id?: string | null;
+          error_code?: string | null;
+          error_message?: string | null;
+          id?: string;
+          payload?: Json;
+          payload_hash?: string;
+          phone_number_id?: string | null;
+          processed_at?: string | null;
+          received_at?: string;
+          status?: Database["public"]["Enums"]["webhook_event_status"];
+          workspace_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_webhook_events_connection_fk";
+            columns: ["connection_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "whatsapp_connections";
+            referencedColumns: ["id", "workspace_id"];
+          },
+        ];
+      };
       workspace_members: {
         Row: {
           created_at: string;
@@ -429,6 +479,7 @@ export type Database = {
         | "location"
         | "contacts"
         | "unsupported";
+      webhook_event_status: "received" | "processed" | "failed" | "ignored";
       whatsapp_connection_status: "pending" | "connected" | "disconnected" | "error";
       workspace_role: "owner" | "admin" | "member";
     };
@@ -570,6 +621,7 @@ export const Constants = {
         "contacts",
         "unsupported",
       ],
+      webhook_event_status: ["received", "processed", "failed", "ignored"],
       whatsapp_connection_status: ["pending", "connected", "disconnected", "error"],
       workspace_role: ["owner", "admin", "member"],
     },

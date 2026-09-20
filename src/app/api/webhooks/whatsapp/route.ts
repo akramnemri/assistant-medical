@@ -6,14 +6,21 @@ import {
   verifyWebhookSubscription,
   type WebhookVerificationRejection,
 } from "@/server/integrations/meta/webhook-verification";
+import {
+  SIGNATURE_HEADER,
+  verifyWebhookSignature,
+} from "@/server/integrations/meta/webhook-signature";
+import {
+  parseWebhookPayload,
+  WHATSAPP_OBJECT,
+} from "@/server/integrations/meta/webhook-payload";
+import { recordWebhookEvent } from "@/server/services/whatsapp-webhook-events";
 
 /**
  * Meta's WhatsApp webhook endpoint.
  *
- * This task implements only the `GET` subscription handshake. The `POST`
- * receiver that accepts actual events is Task 6.2; until it exists, Next.js
- * answers a POST here with 405, which is a correct "not accepting events yet"
- * rather than a silent success.
+ * `GET` is Meta's subscription handshake. `POST` is the delivery of actual
+ * events.
  *
  * The URL is configured in the Meta app dashboard as the callback URL, so it
  * is part of the integration's contract: renaming this route means
@@ -24,7 +31,8 @@ import {
 // needs the raw body for signature verification. Pinned rather than inherited.
 export const runtime = "nodejs";
 
-const OPERATION = "whatsapp.webhook.verify";
+const VERIFY_OPERATION = "whatsapp.webhook.verify";
+const RECEIVE_OPERATION = "whatsapp.webhook.receive";
 
 /**
  * How each refusal is answered.
@@ -61,7 +69,7 @@ export async function GET(request: Request): Promise<Response> {
 
     logger.info("whatsapp webhook subscription verified", {
       requestId,
-      operation: OPERATION,
+      operation: VERIFY_OPERATION,
     });
 
     // Meta requires the challenge echoed verbatim, as the entire body. Sent as
@@ -75,6 +83,102 @@ export async function GET(request: Request): Promise<Response> {
       },
     });
   } catch (error) {
-    return toErrorResponse(error, { requestId, operation: OPERATION });
+    return toErrorResponse(error, { requestId, operation: VERIFY_OPERATION });
   }
+}
+
+/**
+ * Receives WhatsApp events.
+ *
+ * The response rules here are unusual and deliberate. Meta retries a non-200
+ * for 36 hours, and historical webhook data cannot be fetched again — so a
+ * payload we will *never* be able to process must still be acknowledged, or it
+ * buys a day and a half of pointless retries. A payload we *failed* to store,
+ * by contrast, must not be acknowledged: a retry is the only chance to keep it.
+ *
+ * Hence:
+ *
+ * | Situation                        | Answer | Why                                  |
+ * | -------------------------------- | ------ | ------------------------------------ |
+ * | Stored (or already held)         | 200    | Done.                                |
+ * | Bad signature / not configured   | 403    | Not Meta. Never acknowledge it.      |
+ * | Unparseable or unknown object    | 200    | Retrying will not make it parse.     |
+ * | Database write failed            | 500    | Retry is the only way to keep it.    |
+ */
+export async function POST(request: Request): Promise<Response> {
+  const requestId = getRequestId(request.headers);
+
+  try {
+    // Read as text, never `request.json()`. The signature is computed over the
+    // exact bytes Meta sent, and parsing then re-serialising changes them.
+    const rawBody = await request.text();
+
+    const signature = verifyWebhookSignature(
+      rawBody,
+      request.headers.get(SIGNATURE_HEADER),
+    );
+
+    if (signature.outcome === "rejected") {
+      const code =
+        signature.reason === "not_configured"
+          ? ERROR_CODES.CONFIGURATION_ERROR
+          : ERROR_CODES.FORBIDDEN;
+
+      // Nothing is stored. An unauthenticated caller must not be able to write
+      // a row, or the events table becomes a way to fill a doctor's inbox.
+      throw new AppError(code, undefined, {
+        context: { reason: signature.reason },
+      });
+    }
+
+    const parsed = parseWebhookPayload(rawBody);
+
+    if (parsed.outcome === "rejected") {
+      // Signed by Meta but not something we can read. Acknowledged, because a
+      // retry would deliver the same bytes to the same failure.
+      logger.warn("unreadable webhook delivery acknowledged", {
+        requestId,
+        operation: RECEIVE_OPERATION,
+        reason: parsed.reason,
+      });
+
+      return acknowledge(requestId);
+    }
+
+    if (parsed.payload.object !== WHATSAPP_OBJECT) {
+      // A subscription to something other than WhatsApp. Observable, ignored,
+      // and acknowledged so it does not retry forever.
+      logger.warn("webhook delivery for an unexpected object acknowledged", {
+        requestId,
+        operation: RECEIVE_OPERATION,
+        object: parsed.payload.object,
+      });
+
+      return acknowledge(requestId);
+    }
+
+    const event = await recordWebhookEvent({
+      rawBody,
+      payload: parsed.payload,
+      requestId,
+    });
+
+    // Interpreting the payload into messages is Task 6.3. Until then a
+    // delivery is durably stored and nothing more — which is the half that
+    // cannot be redone later, so it is the half that comes first.
+    return acknowledge(requestId, { duplicate: !event.created });
+  } catch (error) {
+    return toErrorResponse(error, { requestId, operation: RECEIVE_OPERATION });
+  }
+}
+
+/**
+ * Meta ignores the body and reads only the status, but a duplicate flag makes
+ * retry behaviour visible when replaying a delivery by hand.
+ */
+function acknowledge(requestId: string, extra: { duplicate?: boolean } = {}): Response {
+  return Response.json(
+    { received: true, ...extra },
+    { status: 200, headers: { [REQUEST_ID_HEADER]: requestId } },
+  );
 }
