@@ -203,10 +203,20 @@ disconnect/reconnect lifecycle.
 Two product rules that constrain the design:
 
 - Personal WhatsApp, the WhatsApp Business App, and the WhatsApp Business
-  Platform are **different product states**. The onboarding UX must reflect the
-  paths Meta actually supports at implementation time, verified against current
-  official documentation — not a "merge your personal account" flow that does
-  not exist.
+  Platform are **different product states**. Verified against Meta's current
+  documentation in Task 5.1 and written up in
+  [integrations/whatsapp.md](integrations/whatsapp.md):
+
+  | Doctor currently uses         | Connectable?                                                                                      |
+  | ----------------------------- | ------------------------------------------------------------------------------------------------- |
+  | Personal WhatsApp (Messenger) | **No** — no official flow exists                                                                  |
+  | WhatsApp Business app         | Yes, via Coexistence (Solution Partner status, Embedded Signup v4, throughput and feature limits) |
+  | A number not on WhatsApp      | Yes, standard Embedded Signup                                                                     |
+
+  So the UI must never offer to "merge", "convert" or "upgrade" a personal
+  WhatsApp account. There is no such action, and offering it strands the user
+  partway through onboarding.
+
 - Only official APIs. No WhatsApp Web scraping, browser automation, QR-session
   reuse, or unofficial libraries.
 
@@ -228,8 +238,12 @@ A connection is modeled as an explicit state (`pending`, `connected`,
 8. defer expensive work out of the request path where justified
 ```
 
-Meta retries deliveries, so the provider message ID is the idempotency boundary
-and is enforced by a unique constraint rather than by application logic alone.
+Meta retries deliveries for **36 hours** and states plainly that
+**"your server should handle deduplication"**, so the provider message ID is the
+idempotency boundary and is enforced by a unique constraint rather than by
+application logic alone. Historical webhook data cannot be queried afterwards,
+so a dropped event is gone permanently: persist first, process after, and
+acknowledge with `200` even for payloads that cannot be parsed.
 Unknown event and message types are recorded and safely ignored — one
 unrecognized payload must not take down the pipeline.
 
