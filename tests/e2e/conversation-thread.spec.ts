@@ -66,10 +66,19 @@ test("a thread reads oldest to newest", async ({ page }) => {
   await page.goto(`/conversations/${CONVERSATION_A}`);
 
   const messages = await renderedMessages(page);
-
   expect(messages.length).toBeGreaterThan(1);
-  // The newest message is at the bottom, as a conversation reads.
-  expect(messages.at(-1)).toContain("70");
+
+  // Asserts the ordering property rather than naming a specific last message:
+  // the realtime tests append to this same database, so "the newest message"
+  // is not a fixed value. Timestamps must be non-decreasing down the page.
+  const timestamps = await page
+    .locator("li article time")
+    .evaluateAll((nodes) =>
+      nodes.map((node) => Date.parse(node.getAttribute("datetime") ?? "")),
+    );
+
+  expect(timestamps.length).toBeGreaterThan(1);
+  expect(timestamps).toEqual([...timestamps].sort((a, b) => a - b));
 });
 
 test("incoming and outgoing messages are distinguishable without colour", async ({

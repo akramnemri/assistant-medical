@@ -211,7 +211,11 @@ describe("MessageThread", () => {
     });
 
     expect(screen.getByText("message a")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /load older/i })).toBeInTheDocument();
+    // `findBy` rather than `getBy`: the button reads "Loading..." until the
+    // transition settles, so asserting immediately races the pending state.
+    expect(
+      await screen.findByRole("button", { name: /load older/i }),
+    ).toBeInTheDocument();
   });
 
   it("shows an empty state rather than a blank panel", () => {

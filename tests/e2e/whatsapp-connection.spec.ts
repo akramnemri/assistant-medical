@@ -61,8 +61,11 @@ test("a workspace mid-onboarding is shown as pending, not as connected", async (
   const main = page.getByRole("main");
   await expect(main).toContainText("Setup in progress");
   await expect(main).not.toContainText("Connected");
-  // A pending connection has no number yet, and must not borrow one.
-  await expect(main).toContainText("Not assigned yet");
+  // An unfinished connection shows the eligibility guidance rather than a
+  // details table full of empty fields, and offers to resume rather than
+  // restart.
+  await expect(main).toContainText("Continue setup");
+  await expect(main).toContainText("Before you connect");
 });
 
 test("one workspace never sees another workspace's connection", async ({ page }) => {
