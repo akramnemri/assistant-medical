@@ -3,29 +3,33 @@
 Handoff note for the next session. **Verify these claims against the repository
 before relying on them** — see `docs/prompts/05_SESSION_CONTINUITY.md`.
 
-**Last updated:** 2026-09-20, end of Task 5.3.
+**Last updated:** 2026-09-20, end of Task 6.1.
 
 ---
 
 ## Where development stopped
 
-|                |                                                                                                               |
-| -------------- | ------------------------------------------------------------------------------------------------------------- |
-| **Milestone**  | First milestone: a trustworthy inbound WhatsApp message pipeline                                              |
-| **Phase**      | 5 (Meta onboarding) complete; Phase 6 (webhooks) not started                                                  |
-| **Last task**  | **Task 5.3 — server-side onboarding completion**                                                              |
-| **Task state** | **Implemented and automatically tested. NOT manually verified, and not verifiable without Meta credentials.** |
-| **Branch**     | `develop`, clean tree                                                                                         |
-| **Next task**  | **Task 6.1 — webhook verification** (the `GET` handshake)                                                     |
+|                |                                                                                                         |
+| -------------- | ------------------------------------------------------------------------------------------------------- |
+| **Milestone**  | First milestone: a trustworthy inbound WhatsApp message pipeline                                        |
+| **Phase**      | 5 (Meta onboarding) complete; Phase 6 (webhooks) started                                                |
+| **Last task**  | **Task 6.1 — webhook verification (the `GET` handshake)**                                               |
+| **Task state** | **Implemented, automatically tested, and manually verified locally. Not merged — waiting at the gate.** |
+| **Branch**     | **`feat/webhook-verification`**, one commit ahead of `develop`                                          |
+| **Next task**  | **Task 6.2 — secure webhook receiver** (the `POST` endpoint)                                            |
 
 ### Manual testing
 
-The developer **waived** the manual-test gate for Tasks 5.2 and 5.3 in the
-previous session ("continue i didn't test"). That waiver applied to that
-session only.
+Tasks 5.2 and 5.3 have **never been manually tested**. The gate was waived for
+them in one earlier session, and Task 6.1 was then started without re-asking —
+the session read "continue next task" as the go-ahead. 5.3 is in any case not
+manually verifiable without Meta credentials, but **5.2 (the connection UI) is**
+and remains outstanding.
 
-Before starting Task 6.1, **ask whether the developer wants to manually test
-5.2/5.3 first, or waive again**. Do not assume.
+Task 6.1 was manually exercised against the local dev server on 2026-09-20 —
+all five steps plus the POST-405 case and the signed-out redirect. That covers
+our half of the handshake; it does **not** cover Meta's, which still needs a
+public HTTPS URL and a Meta app.
 
 ---
 
@@ -34,24 +38,28 @@ Before starting Task 6.1, **ask whether the developer wants to manually test
 The four states are defined in `docs/prompts/05_SESSION_CONTINUITY.md`. Nothing
 below is _manually verified_ unless it says so.
 
-| Area                               | State                                                                                                                |
-| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| Auth, workspaces, RLS              | implemented · auto-tested · **manually verified**                                                                    |
-| Conversation list and thread       | implemented · auto-tested · **manually verified**                                                                    |
-| Realtime message delivery          | implemented · auto-tested · **manually verified** (browser: 60→61 messages, no reload)                               |
-| WhatsApp connection model + UI     | implemented · auto-tested · **not manually verified**                                                                |
-| **Meta onboarding exchange (5.3)** | implemented · auto-tested against a **mocked** provider · **NOT VERIFIED — never called with real Meta credentials** |
-| Webhooks (Phase 6)                 | **not implemented**                                                                                                  |
-| Outbound messaging                 | **not implemented**                                                                                                  |
-| Deployment                         | **not implemented** — never deployed anywhere                                                                        |
+| Area                               | State                                                                                                                 |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Auth, workspaces, RLS              | implemented · auto-tested · **manually verified**                                                                     |
+| Conversation list and thread       | implemented · auto-tested · **manually verified**                                                                     |
+| Realtime message delivery          | implemented · auto-tested · **manually verified** (browser: 60→61 messages, no reload)                                |
+| WhatsApp connection model + UI     | implemented · auto-tested · **not manually verified**                                                                 |
+| **Meta onboarding exchange (5.3)** | implemented · auto-tested against a **mocked** provider · **NOT VERIFIED — never called with real Meta credentials**  |
+| **Webhook verification (6.1)**     | implemented · auto-tested · **manually verified locally** (curl + browser) · never received a **real Meta** handshake |
+| Webhook receiver (6.2 onward)      | **not implemented**                                                                                                   |
+| Outbound messaging                 | **not implemented**                                                                                                   |
+| Deployment                         | **not implemented** — never deployed anywhere                                                                         |
 
 ### Automated checks — last run 2026-09-20, all passing
 
 ```
-npm run verify      typecheck, lint, format, 219 unit+integration tests, build
+npm run verify      typecheck, lint, format, 239 unit+integration tests, build
 npm run db:test     90 pgTAP assertions across 3 files
 npm run test:e2e    35 Playwright tests
 ```
+
+The 239 figure had **no skipped suites**, so the Supabase-dependent tests
+genuinely ran.
 
 `db:test`, `test:e2e` and the integration tests **require the local Supabase
 stack**. The integration suites skip themselves when it is unreachable — a
@@ -67,7 +75,8 @@ it serves Postgres Changes. Re-run before investigating.
 
 ## Git
 
-- `develop` holds all work. **`main` is still at the initial commit, 33 commits
+- `develop` holds all merged work; `feat/webhook-verification` holds Task 6.1
+  and is **not merged yet**. **`main` is still at the initial commit, 33 commits
   behind.** Nothing has ever been promoted, which is correct: per
   `03_GIT_TESTING_PIPELINE.md` promotion happens only when the first milestone
   is stable, and the inbound pipeline does not exist yet.
@@ -136,8 +145,9 @@ correct for Embedded Signup's code, and the real error codes.
    not deliver to `localhost`. A tunnel or a deployed preview is required.
 4. A test phone number (Cloud API provides one free)
 
-Task 6.1 (webhook verification) **can be built and tested without any of this**
-— it only needs a verify token we choose.
+Task 6.1 (webhook verification) was built and automatically tested **without any
+of this** — it only needs a verify token we choose. Confirming it against a real
+Meta handshake still needs items 1 and 3.
 
 ---
 
@@ -168,6 +178,15 @@ Ordered by how much they matter.
 
 **Meta**
 
+- **The verify token appears in request logs.** Meta puts it in the query
+  string, so Next's dev request log — and Vercel's access log in production —
+  records the full URL including `hub.verify_token`. Nothing in our code logs
+  it, and there is no way to stop Meta sending it this way. Consequences:
+  treat the token as visible to anyone who can read hosting logs, keep it
+  distinct from `META_APP_SECRET`, and rotate it if logs are ever shared.
+- The webhook endpoint answers only `GET`. A `POST` gets 405 from Next.js until
+  Task 6.2 — correct, but it means Meta's _delivery_ path does not exist yet, so
+  a subscription that verifies successfully will still drop every event.
 - No Embedded Signup launcher — the server side is ready, but nothing in the
   browser can start the flow. Needs Meta's JS SDK and a real app id.
 - No token refresh; `token_expires_at` is stored but nothing acts on it.
@@ -187,20 +206,35 @@ Ordered by how much they matter.
 
 ---
 
+## What Task 6.1 built
+
+- `src/server/integrations/meta/webhook-verification.ts` — the handshake
+  decision as a pure function over the query string. Timing-safe token
+  comparison; fails closed when `META_WEBHOOK_VERIFY_TOKEN` is unset.
+- `src/app/api/webhooks/whatsapp/route.ts` — `GET` only. Echoes `hub.challenge`
+  verbatim as `text/plain` on success; 403 / 400 / 500 on refusal, with the
+  reason in the logs and never in the response body.
+- `tests/unit/whatsapp-webhook-verification.test.ts` — 20 tests.
+
+**`/api/webhooks/whatsapp` is now part of the Meta app's configuration.**
+Renaming it means reconfiguring the callback URL in the Meta dashboard.
+
+---
+
 ## Next task
 
-**Task 6.1 — Webhook verification** (`04_IMPLEMENTATION_ROADMAP.md`).
+**Task 6.2 — Secure webhook receiver** (`04_IMPLEMENTATION_ROADMAP.md`).
 
-Implement the `GET` handshake at the webhook endpoint:
+The `POST` endpoint at the same route. The parts that matter, in order:
 
-- Meta sends `hub.mode`, `hub.verify_token`, `hub.challenge`
-- **Validate the token before echoing the challenge.** Echoing unconditionally
-  lets anyone attach a webhook.
-- Echo `hub.challenge` verbatim on success
-- Tests: valid verification, invalid token, missing parameters, unexpected
-  requests
-
-Fully buildable and testable now — it needs only `META_WEBHOOK_VERIFY_TOKEN`,
-which we choose. Details in `docs/integrations/whatsapp.md`.
+- verify `X-Hub-Signature-256` over the **raw** body, timing-safe, before
+  parsing anything
+- validate the payload at runtime; assign a correlation ID
+- resolve the connection/workspace from the phone number ID
+- durable idempotency — the unique index on `messages.provider_message_id` is
+  the boundary, and a `23505` on insert is the expected duplicate path, not an
+  error
+- **answer 200 even to payloads we cannot parse**; a non-200 buys 36 hours of
+  Meta retries for something that will never succeed
 
 **First**, resolve the outstanding manual-test question above.

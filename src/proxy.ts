@@ -124,8 +124,14 @@ export const config = {
    * Excludes static assets and image optimization. Without this the proxy runs
    * for every CSS, JS and image request — adding an auth round trip to each and
    * risking assets being redirected to the sign-in page.
+   *
+   * `api/webhooks` is excluded for the same reason with higher stakes: Meta
+   * authenticates itself with a signature, never a session, so the auth round
+   * trip would be pure latency on a delivery path where a slow answer costs us
+   * 36 hours of retries. Safe because no webhook route is in
+   * `PROTECTED_PREFIXES` — this removes a useless lookup, not a protection.
    */
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!api/webhooks|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };
