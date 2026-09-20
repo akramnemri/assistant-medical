@@ -3,20 +3,20 @@
 Handoff note for the next session. **Verify these claims against the repository
 before relying on them** — see `docs/prompts/05_SESSION_CONTINUITY.md`.
 
-**Last updated:** 2026-09-20, end of Task 6.1.
+**Last updated:** 2026-09-20, end of Task 6.3.
 
 ---
 
 ## Where development stopped
 
-|                |                                                                                                         |
-| -------------- | ------------------------------------------------------------------------------------------------------- |
-| **Milestone**  | First milestone: a trustworthy inbound WhatsApp message pipeline                                        |
-| **Phase**      | 5 (Meta onboarding) complete; Phase 6 (webhooks) started                                                |
-| **Last task**  | **Task 6.1 — webhook verification (the `GET` handshake)**                                               |
-| **Task state** | **Implemented, automatically tested, and manually verified locally. Not merged — waiting at the gate.** |
-| **Branch**     | **`feat/webhook-verification`**, one commit ahead of `develop`                                          |
-| **Next task**  | **Task 6.2 — secure webhook receiver** (the `POST` endpoint)                                            |
+|                |                                                                                 |
+| -------------- | ------------------------------------------------------------------------------- |
+| **Milestone**  | First milestone: a trustworthy inbound WhatsApp message pipeline                |
+| **Phase**      | 5 (Meta onboarding) complete; Phase 6 (webhooks) started                        |
+| **Last task**  | **Task 6.3 — normalise inbound messages into conversations**                    |
+| **Task state** | **Implemented, automatically tested, verified end to end locally. Not merged.** |
+| **Branch**     | **`feat/inbound-message-normalization`**, ahead of `develop`                    |
+| **Next task**  | **Task 7.1 — prove the pipeline with a real Meta message**                      |
 
 ### Manual testing
 
@@ -46,19 +46,20 @@ below is _manually verified_ unless it says so.
 | WhatsApp connection model + UI     | implemented · auto-tested · **not manually verified**                                                                 |
 | **Meta onboarding exchange (5.3)** | implemented · auto-tested against a **mocked** provider · **NOT VERIFIED — never called with real Meta credentials**  |
 | **Webhook verification (6.1)**     | implemented · auto-tested · **manually verified locally** (curl + browser) · never received a **real Meta** handshake |
-| Webhook receiver (6.2 onward)      | **not implemented**                                                                                                   |
+| **Webhook receiver (6.2)**         | implemented · auto-tested · **verified locally** with signed payloads · never received a **real Meta** delivery       |
+| **Inbound normalisation (6.3)**    | implemented · auto-tested · **verified locally** end to end, message visible in the browser inbox                     |
 | Outbound messaging                 | **not implemented**                                                                                                   |
 | Deployment                         | **not implemented** — never deployed anywhere                                                                         |
 
 ### Automated checks — last run 2026-09-20, all passing
 
 ```
-npm run verify      typecheck, lint, format, 239 unit+integration tests, build
+npm run verify      typecheck, lint, format, 289 unit+integration tests, build
 npm run db:test     90 pgTAP assertions across 3 files
 npm run test:e2e    35 Playwright tests
 ```
 
-The 239 figure had **no skipped suites**, so the Supabase-dependent tests
+The 289 figure had **no skipped suites**, so the Supabase-dependent tests
 genuinely ran.
 
 `db:test`, `test:e2e` and the integration tests **require the local Supabase
@@ -184,9 +185,18 @@ Ordered by how much they matter.
   it, and there is no way to stop Meta sending it this way. Consequences:
   treat the token as visible to anyone who can read hosting logs, keep it
   distinct from `META_APP_SECRET`, and rotate it if logs are ever shared.
-- The webhook endpoint answers only `GET`. A `POST` gets 405 from Next.js until
-  Task 6.2 — correct, but it means Meta's _delivery_ path does not exist yet, so
-  a subscription that verifies successfully will still drop every event.
+- **The test suites assume each seeded workspace has exactly one WhatsApp
+  connection.** Connecting a real number locally adds a second and breaks the
+  pgTAP suite (`more than one row returned for \gset`) and one Playwright spec,
+  with errors that point nowhere near the cause. This bit twice during Task 6.2.
+  Clean up demo connections, or fix the fixtures before the real Meta test.
+- **Media messages store only the caption.** There are no URL or MIME columns,
+  so an image or voice note arrives as a row with the right type and no way to
+  open it. Enough to prove the pipeline; not enough for a doctor.
+- **Processing runs inside the request.** Fine at current volume, but Meta
+  batches up to 1000 updates and expects a prompt acknowledgement. A large batch
+  could time out, which Meta then retries — safely, because of the idempotency
+  digest, but slowly.
 - No Embedded Signup launcher — the server side is ready, but nothing in the
   browser can start the flow. Needs Meta's JS SDK and a real app id.
 - No token refresh; `token_expires_at` is stored but nothing acts on it.
@@ -221,20 +231,47 @@ Renaming it means reconfiguring the callback URL in the Meta dashboard.
 
 ---
 
+## What Task 6.3 built
+
+- `src/server/integrations/meta/inbound-messages.ts` — Meta's payload into
+  domain terms. Nothing throws: one unreadable message among a thousand is
+  reported as skipped and the rest of the batch proceeds.
+- `src/server/services/inbound-message-processing.ts` — stored event → contact →
+  conversation → message, idempotent at the message level so an event can be
+  replayed after a fix.
+- Tests: 16 normalisation unit tests, 8 pipeline integration tests.
+
+### Verified end to end locally, 2026-09-20
+
+Signed POST to the running dev server → event stored → contact and conversation
+created → message stored once → **visible at the top of the inbox in the browser
+with an unread badge**. Retries and rebatched deliveries produced no duplicates.
+
+What this does _not_ prove: that Meta's real servers can reach us, that the real
+App Secret validates, or that a real `wamid` and timestamp look as documented.
+
+---
+
 ## Next task
 
-**Task 6.2 — Secure webhook receiver** (`04_IMPLEMENTATION_ROADMAP.md`).
+**Task 7.1 — the first real end-to-end demo** (`04_IMPLEMENTATION_ROADMAP.md`).
 
-The `POST` endpoint at the same route. The parts that matter, in order:
+Everything in code is in place. What remains is configuration:
 
-- verify `X-Hub-Signature-256` over the **raw** body, timing-safe, before
-  parsing anything
-- validate the payload at runtime; assign a correlation ID
-- resolve the connection/workspace from the phone number ID
-- durable idempotency — the unique index on `messages.provider_message_id` is
-  the boundary, and a `23505` on insert is the expected duplicate path, not an
-  error
-- **answer 200 even to payloads we cannot parse**; a non-200 buys 36 hours of
-  Meta retries for something that will never succeed
+1. **Rotate the Meta App Secret** — it was exposed in a chat transcript on
+   2026-09-20 and must be replaced before the endpoint is publicly reachable.
+   Put the new value in `.env.local`; `META_APP_SECRET` currently holds a
+   placeholder, so real deliveries would be rejected with 403.
+2. **Expose the endpoint over public HTTPS** — a tunnel. Meta rejects
+   self-signed certificates and will not deliver to `localhost`.
+3. **Configure the webhook in the Meta dashboard** — callback URL
+   `<tunnel>/api/webhooks/whatsapp`, the verify token from `.env.local`,
+   subscribed to the `messages` field.
+4. **Connect the test number to a workspace** — phone number id
+   `1275386478999841`, WABA `2439042053289493`. There is still no Embedded
+   Signup launcher, so this is a manual insert for now.
+5. **Send a WhatsApp message from a real phone** and watch it appear.
 
-**First**, resolve the outstanding manual-test question above.
+Meta account state as of 2026-09-20: app id `1091720370007531`, test number
+`+1 (555) 190-2983`, `hello_world` delivered and replied to, so the customer
+service window has been opened at least once.

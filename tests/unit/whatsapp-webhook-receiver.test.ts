@@ -23,12 +23,18 @@ const SYNTHETIC_WA_ID = "21600000000";
 const originalEnv = process.env;
 
 const recordWebhookEvent = vi.fn();
+const processWebhookEvent = vi.fn();
 
-// The database is exercised by the integration suite; here it is stubbed so the
-// status-code rules can be tested in isolation, including the paths a real
-// database would make hard to reach (a write failing at the wrong moment).
+// The database is exercised by the integration suite; here both services are
+// stubbed so the status-code rules can be tested in isolation, including the
+// paths a real database would make hard to reach (a write failing at the wrong
+// moment).
 vi.mock("@/server/services/whatsapp-webhook-events", () => ({
   recordWebhookEvent: (...args: unknown[]) => recordWebhookEvent(...args),
+}));
+
+vi.mock("@/server/services/inbound-message-processing", () => ({
+  processWebhookEvent: (...args: unknown[]) => processWebhookEvent(...args),
 }));
 
 beforeEach(() => {
@@ -38,6 +44,14 @@ beforeEach(() => {
     eventId: "11111111-1111-1111-1111-111111111111",
     created: true,
     workspaceId: "22222222-2222-2222-2222-222222222222",
+  });
+
+  processWebhookEvent.mockReset();
+  processWebhookEvent.mockResolvedValue({
+    eventId: "11111111-1111-1111-1111-111111111111",
+    inserted: 1,
+    duplicates: 0,
+    skipped: 0,
   });
 
   process.env = {
@@ -207,6 +221,21 @@ describe("POST /api/webhooks/whatsapp — acknowledgement rules", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ received: true, duplicate: true });
+
+    // Re-processing a retry would be harmless but pointless: its messages are
+    // already stored.
+    expect(processWebhookEvent).not.toHaveBeenCalled();
+  });
+
+  // Processing happens in the request, so a failure there must not be
+  // acknowledged either — the event is stored, but the retry is what gets the
+  // messages in front of the doctor.
+  it("does not acknowledge a delivery it stored but could not process", async () => {
+    processWebhookEvent.mockRejectedValue(new Error("processing failed"));
+
+    const response = await post(JSON.stringify(inboundPayload()));
+
+    expect(response.status).toBe(500);
   });
 
   it("stores a delivery naming a number no workspace has connected", async () => {
