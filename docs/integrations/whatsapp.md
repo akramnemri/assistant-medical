@@ -202,6 +202,49 @@ Source: [Webhooks — Getting Started](https://developers.facebook.com/docs/grap
 
 ---
 
+## Cost
+
+Verified 2026-09-20 against
+[WhatsApp pricing](https://developers.facebook.com/docs/whatsapp/pricing).
+
+**For this product's core use case, messaging is free.**
+
+A patient messaging the doctor opens a **customer service window**. Meta's
+wording: _"All non-template messages are free"_ when sent within one, and
+_"All messages are free for 72 hours, including template messages, if sent
+within an open free entry point window."_
+
+That is exactly the shape of this product: the patient writes first, the doctor
+replies. The entire first milestone — inbound message, stored, shown, replied
+to — sits inside the free path.
+
+|                                                           | Charged?           |
+| --------------------------------------------------------- | ------------------ |
+| Patient-initiated messages                                | **Free**           |
+| Doctor's replies, non-template, inside the service window | **Free**           |
+| Utility templates inside the service window               | **Free**           |
+| Utility / authentication templates **outside** the window | Charged            |
+| Marketing templates                                       | **Always charged** |
+
+Since **1 July 2025**: _"You are only charged when a template message is
+delivered."_ Pricing is strictly per message — there is **no monthly free
+allowance**, and equally no subscription or minimum.
+
+What this means in practice: the cost only begins when the product starts
+messaging patients _first_ — appointment reminders, follow-ups, campaigns. That
+is a post-MVP decision, and a per-message one that can be modelled when it
+arrives.
+
+The pricing page covers per-message charges only and lists no platform or
+hosting fee for the Cloud API itself. Meta hosts it, so there is no server cost
+on our side for the messaging layer either.
+
+⚠️ Not independently verified: the claim below that the Cloud API provides a
+free test number for development. It is widely documented in the get-started
+guides but was not confirmed from the pricing page.
+
+---
+
 ## Blockers
 
 Per the roadmap, implementation **stops here** until the following exist. None
