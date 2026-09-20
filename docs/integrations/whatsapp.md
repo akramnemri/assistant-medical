@@ -127,6 +127,24 @@ What it provides:
   onboarding — a real behaviour change to the doctor's existing app
 - the data sync window is **24 hours** after onboarding
 
+### Registering a number removes it from WhatsApp Messenger
+
+The single most important sentence for onboarding UX, from
+[Business phone numbers](https://developers.facebook.com/docs/whatsapp/phone-numbers)
+(verified 2026-09-20):
+
+> Registered numbers can still be used for ordinary purposes such as calls and
+> SMS, but **cannot be used on WhatsApp Messenger**. Numbers already in use with
+> WhatsApp cannot be registered unless they are deleted first.
+
+So "connect the number I already use on WhatsApp" is never a free action. It is
+always either coexistence (Business app only, needs Tech Provider status) or
+deleting the WhatsApp account on that number. The number keeps working as a
+phone; it stops working as a WhatsApp Messenger account.
+
+A number must also be one you own, have a country code, and be able to receive
+a voice call or SMS for the one-time verification code.
+
 ### The destructive alternative
 
 A Business app number can instead be **deleted and re-registered** on the Cloud
@@ -245,9 +263,11 @@ The pricing page covers per-message charges only and lists no platform or
 hosting fee for the Cloud API itself. Meta hosts it, so there is no server cost
 on our side for the messaging layer either.
 
-⚠️ Not independently verified: the claim below that the Cloud API provides a
-free test number for development. It is widely documented in the get-started
-guides but was not confirmed from the pricing page.
+**Verified 2026-09-20** against
+[Business phone numbers](https://developers.facebook.com/docs/whatsapp/phone-numbers):
+completing the get-started flow yields a registered **test business phone
+number** automatically. It costs nothing, and it is the right number to develop
+against — see the registration rule below before considering a real one.
 
 ---
 
