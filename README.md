@@ -23,6 +23,17 @@ Two accounts, because tenant isolation cannot be checked by hand with one. Both
 are synthetic and local-only — never put a real address or a reused password in
 that file, it is committed.
 
+## Continuing this project
+
+If you are picking this up — human or AI — start with
+**[docs/project-state.md](docs/project-state.md)**: what was last worked on,
+what is verified, what is merely written, and the exact next task.
+
+The engineering rules live in [docs/prompts/](docs/prompts/), in the repository
+rather than on someone's desktop, so any session inherits them. Read
+[05_SESSION_CONTINUITY.md](docs/prompts/05_SESSION_CONTINUITY.md) before making
+changes.
+
 ## Stack
 
 | Concern         | Choice                                                    |
