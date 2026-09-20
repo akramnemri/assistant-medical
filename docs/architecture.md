@@ -191,11 +191,42 @@ server-side code holding the secret key, never by the browser.
 
 ## WhatsApp integration boundary
 
-**Not implemented yet — Phase 5 onward.**
+Onboarding completion implemented in Task 5.3 — **against the documented
+contract only, never exercised with real Meta credentials.** Webhooks remain
+unbuilt (Phase 6).
 
 All Meta-specific knowledge lives in `src/server/integrations/meta/`: access
 tokens, phone number IDs, WABA IDs, webhook payload shapes, provider error
-codes, API versioning. The boundary eventually covers official onboarding,
+codes, API versioning.
+
+**The API version is pinned** (`v26.0`). An unpinned request follows whatever
+default Meta chooses, which can change behaviour with no change on our side.
+
+**Every response is validated at runtime**, because the documentation and the
+API can disagree — and this code was written from documentation alone. A 200 in
+an unrecognised shape is a `PROVIDER_ERROR`, not a validation failure: it is not
+something the doctor can fix.
+
+**Meta's own error messages are never shown to a user.** They are written for
+developers, can name internal objects and sometimes echo input back. The
+provider code, subcode and `fbtrace_id` go to the logs instead. A 4xx maps to
+"start setup again" (retrying identical input cannot help); a 5xx or transport
+failure maps to "try again shortly".
+
+**Credentials never travel in a URL.** The app secret goes in a POST body and
+the access token in an `Authorization` header, because a URL ends up in proxy
+logs, browser history and error reports.
+
+**The phone number id is verified, not trusted.** It arrives from the browser at
+the end of Embedded Signup, so the service fetches the number using the token
+Meta just issued: that proves the token actually grants access to the number
+being claimed. Without it, a caller could submit someone else's phone number id
+alongside their own code.
+
+**Completion is idempotent** by provider phone number id — Meta's flow can fire
+its handler more than once and a doctor can double-click. A second connection
+for the same number would split inbound routing between two rows. The exchange
+happens before any write, so a provider failure leaves nothing half-created. The boundary eventually covers official onboarding,
 credential exchange and storage, webhook verification and signature validation,
 inbound normalization, outbound messaging, provider error normalization, and the
 disconnect/reconnect lifecycle.

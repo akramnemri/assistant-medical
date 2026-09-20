@@ -28,7 +28,16 @@ const PASSWORD = "devpassword123";
 const CONVERSATION_A = "55555555-5555-5555-5555-555555555555";
 
 /** Realtime is a network round trip; this is generous enough not to flake. */
-const DELIVERY_TIMEOUT_MS = 12_000;
+const DELIVERY_TIMEOUT_MS = 20_000;
+
+/**
+ * SUBSCRIBED means the channel joined, not that the Postgres Changes binding
+ * is serving yet. Inserting in that window loses the event and the test fails
+ * for a reason unrelated to the code under test — which is what made this
+ * suite intermittent. Observed in the browser too: the first seconds after a
+ * page load deliver nothing.
+ */
+const BINDING_SETTLE_MS = 2_000;
 
 type Client = SupabaseClient<Database>;
 
@@ -90,6 +99,8 @@ async function subscribeToConversation(
     });
   });
 
+  await new Promise((resolve) => setTimeout(resolve, BINDING_SETTLE_MS));
+
   return channel;
 }
 
@@ -123,6 +134,14 @@ beforeAll(async () => {
 afterAll(async () => {
   await doctorA?.removeAllChannels();
   await doctorB?.removeAllChannels();
+
+  // These tests insert inbound messages into a seeded conversation that other
+  // suites read. Left behind, they fill the first page of that thread with
+  // inbound rows and the thread E2E stops finding an outbound bubble — a
+  // failure with no connection to the code being changed.
+  if (admin !== undefined) {
+    await admin.from("messages").delete().like("provider_message_id", "wamid.RTTEST.%");
+  }
 });
 
 /** The webhook writes with the secret key, so the test does too. */
