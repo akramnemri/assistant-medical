@@ -156,6 +156,12 @@ Meta sends a GET with:
 Validate the token **before** echoing the challenge. Echoing unconditionally
 would let anyone attach a webhook.
 
+Implemented in `src/server/integrations/meta/webhook-verification.ts`, exposed
+at **`/api/webhooks/whatsapp`** — this is the callback URL to enter in the Meta
+app dashboard, so renaming the route means reconfiguring the Meta app. The
+comparison is timing-safe, and the endpoint fails closed when
+`META_WEBHOOK_VERIFY_TOKEN` is unset rather than accepting the handshake.
+
 ### Transport
 
 > "Your server must have a valid TLS or SSL certificate correctly configured and
