@@ -158,6 +158,15 @@ Ordered by how much they matter.
 
 **Authorization**
 
+- Fixed 2026-09-23: every table carried Supabase's default grant of ALL to
+  `anon` and `authenticated`, which includes **TRUNCATE — a privilege Row Level
+  Security does not filter**. The `authenticated` role could empty
+  `public.messages` across every workspace, and no policy would have been
+  consulted. Not reachable through PostgREST, so latent rather than live, but
+  fixed and covered by `supabase/tests/table_privileges_test.sql`. **Any new
+  table must not re-grant it** — the migration also changes default privileges,
+  and the pgTAP sweep fails if one slips through.
+
 - `/admin` is now closed by default: it requires a row in `platform_admins`,
   a privilege deliberately kept separate from workspace roles and grantable
   only with the service key. No platform admin is seeded, so the route 404s
