@@ -2,6 +2,7 @@ import Link from "next/link";
 import { MainNav } from "@/components/shared/main-nav";
 import { SignOutButton } from "@/features/auth/components/sign-out-button";
 import { getCurrentUser } from "@/lib/supabase/session";
+import { isCurrentUserPlatformAdmin } from "@/server/services/platform-admin";
 
 /**
  * Shared chrome for every authenticated route: a sidebar on desktop, a
@@ -13,6 +14,11 @@ import { getCurrentUser } from "@/lib/supabase/session";
  */
 export async function AppShell({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
+
+  // Decided here, on the server, so the browser is never asked to work out
+  // whether it should see administration. The link is hidden for everyone else
+  // to avoid advertising a route they cannot open.
+  const showAdmin = await isCurrentUserPlatformAdmin();
 
   return (
     <div className="flex min-h-dvh flex-col md:flex-row">
@@ -26,7 +32,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
           </Link>
 
           <div className="overflow-x-auto">
-            <MainNav />
+            <MainNav showAdmin={showAdmin} />
           </div>
 
           {user === null ? null : (

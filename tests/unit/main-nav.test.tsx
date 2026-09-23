@@ -10,7 +10,7 @@ vi.mock("next/navigation", () => ({ usePathname: mockPathname }));
 describe("MainNav", () => {
   it("renders a link for every navigation item", () => {
     mockPathname.mockReturnValue("/dashboard");
-    render(<MainNav />);
+    render(<MainNav showAdmin />);
 
     for (const item of ALL_NAV_ITEMS) {
       expect(screen.getByRole("link", { name: item.label })).toHaveAttribute(

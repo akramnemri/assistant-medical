@@ -50,8 +50,9 @@ export const WORKSPACE_NAV: readonly NavItem[] = [
 
 /**
  * Kept separate from WORKSPACE_NAV because admin is a different authorization
- * boundary, not just another workspace page. It is rendered unconditionally for
- * now; Task 2.x gates it behind a real role check.
+ * boundary, not just another workspace page. Rendered only for platform
+ * administrators — see `AppShell`, and `src/app/admin/layout.tsx` for the check
+ * that actually enforces it.
  */
 export const ADMIN_NAV: readonly NavItem[] = [
   {
