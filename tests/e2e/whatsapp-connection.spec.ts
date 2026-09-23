@@ -9,6 +9,13 @@ import { expect, test } from "@playwright/test";
  * test, because both rows are legitimately owned by *someone*.
  *
  * Uses the accounts from supabase/seed.sql, so it needs a seeded local stack.
+ *
+ * **If these fail after you connected a real WhatsApp number locally, run
+ * `npm run db:reset`.** The connection screen shows one connection —
+ * `getActiveConnection` prefers the newest `connected` row — so a second
+ * connected number in doctor A's workspace shadows the seeded fixture and the
+ * assertions below look at the wrong row. That is leftover data, not a
+ * regression.
  */
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://127.0.0.1:54321";
@@ -47,9 +54,12 @@ test("a connected workspace shows its number and provider identifiers", async ({
   await page.goto("/whatsapp");
 
   const main = page.getByRole("main");
-  await expect(main).toContainText("Connected");
-  await expect(main).toContainText(DOCTOR_A_DISPLAY_NUMBER);
-  await expect(main).toContainText(DOCTOR_A_PHONE_NUMBER_ID);
+  const hint =
+    "seeded fixture not shown — run `npm run db:reset` if you connected a real number";
+
+  await expect(main, hint).toContainText("Connected");
+  await expect(main, hint).toContainText(DOCTOR_A_DISPLAY_NUMBER);
+  await expect(main, hint).toContainText(DOCTOR_A_PHONE_NUMBER_ID);
 });
 
 test("a workspace mid-onboarding is shown as pending, not as connected", async ({
