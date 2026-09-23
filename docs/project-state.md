@@ -3,7 +3,7 @@
 Handoff note for the next session. **Verify these claims against the repository
 before relying on them** — see `docs/prompts/05_SESSION_CONTINUITY.md`.
 
-**Last updated:** 2026-09-23. **First milestone complete, every criterion verified.**
+**Last updated:** 2026-09-23. Milestone complete, hardened, promoted to `main`.
 
 ---
 
@@ -13,10 +13,10 @@ before relying on them** — see `docs/prompts/05_SESSION_CONTINUITY.md`.
 | -------------- | ----------------------------------------------------------------------------- |
 | **Milestone**  | First milestone: a trustworthy inbound WhatsApp message pipeline              |
 | **Phase**      | 6 complete. **The inbound pipeline works end to end with real Meta traffic.** |
-| **Last task**  | **Task 6.3 — normalise inbound messages into conversations**                  |
-| **Task state** | **Merged. Verified with a real WhatsApp message from a real phone.**          |
+| **Last task**  | **Task 7.2 — milestone hardening**                                            |
+| **Task state** | **Complete. `develop` promoted to `main`.**                                   |
 | **Branch**     | `develop`, clean tree                                                         |
-| **Next task**  | **Task 7.2 — milestone hardening**, then consider `develop` → `main`          |
+| **Next task**  | **Post-MVP. Nothing is deployed — see below before assuming otherwise.**      |
 
 ### Manual testing
 
@@ -76,9 +76,11 @@ it serves Postgres Changes. Re-run before investigating.
 
 ## Git
 
-- `develop` holds all merged work; `feat/webhook-verification` holds Task 6.1
-  and is **not merged yet**. **`main` is still at the initial commit, 33 commits
-  behind.** Nothing has ever been promoted, which is correct: per
+- `develop` holds all merged work and was promoted to `main` on 2026-09-23,
+  after the first milestone was demonstrated end to end and hardened.
+  **Promotion did not deploy anything.** There is no deployment target, no
+  hosting, and no production environment. `main` means "the milestone is in the
+  trunk", not "this is live". Nothing has ever been promoted, which is correct: per
   `03_GIT_TESTING_PIPELINE.md` promotion happens only when the first milestone
   is stable, and the inbound pipeline does not exist yet.
 - Remote has only `origin/develop` and `origin/main`. Feature branches are
@@ -325,20 +327,41 @@ Meta account: app id `1091720370007531`, test number `+1 (555) 190-2983`.
 
 ## Next task
 
-**Task 7.2 — first milestone hardening** (`04_IMPLEMENTATION_ROADMAP.md`).
+The first milestone is done. **Before choosing post-MVP work, understand what
+this is not.**
 
-Task 7.1 is effectively done — the end-to-end demo happened. What 7.2 asks for,
-in the order that matters here:
+### What does not exist yet
 
-1. **Watch realtime live.** Inbox open, send from a phone, confirm no refresh.
-   This is the one milestone criterion still unverified.
-2. **Fix the fixture fragility.** The pgTAP suite and one E2E spec assume each
-   seeded workspace has exactly one connection; a real connection breaks them
-   with errors that point elsewhere. This cost time twice.
-3. **Decide on `/admin`**, which any signed-in user can still reach. It is the
-   largest open authorization gap and should not be promoted to `main` as is.
-4. Re-check RLS, indexes and idempotency; confirm no secret is committed.
-5. Full `verify`, `db:test`, `test:e2e` with the stack up and **no skipped
-   suites**.
+| Gap                                   | Consequence                                                                                                   |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| **No deployment**                     | Has only ever run on one laptop behind a temporary tunnel. `main` is not live.                                |
+| **No Embedded Signup launcher**       | A doctor cannot connect their own number. Every connection so far was an `insert` run by hand.                |
+| **No send box**                       | A doctor can read patient messages and cannot answer them.                                                    |
+| **Media unreadable**                  | An image or voice note stores its type and caption; there are no URL or MIME columns, so it cannot be opened. |
+| **Nothing marks a conversation read** | `unread_count` only ever grows.                                                                               |
 
-Only then consider `develop` → `main`.
+The honest summary: the inbound half of a conversation is trustworthy. There is
+no outbound half, and no way for a doctor to get started without an engineer.
+
+### The three candidates, in the order that serves a real user
+
+1. **Outbound messaging.** The largest gap by far. A doctor reading messages
+   they cannot answer has an inbox, not a product. Patient-initiated
+   conversations open a free 24-hour service window, so replies inside it cost
+   nothing — the whole flow is already free. Needs a send box, an outbound
+   service calling the Graph API, the connection's stored access token, and the
+   `pending → sent → delivered → read` lifecycle the `messages` table already
+   models but nothing writes.
+2. **Embedded Signup.** Until this exists every new doctor needs an engineer
+   with the service key. Needs Meta's JS SDK, a real app id in the browser, and
+   the server exchange built in Task 5.3 — **which has never been run against
+   real Meta credentials** and is the least trustworthy code in the repository.
+3. **Deployment.** Vercel plus a hosted Supabase project. Turns the tunnel into
+   a stable callback URL and makes everything above testable by someone who is
+   not sitting at this laptop. Also forces the secrets story to be real.
+
+A defensible order is 3 → 1 → 2: deploy so there is a stable URL, add replies so
+the product is usable, then let doctors onboard themselves. Deploying first also
+retires the "it only works on one machine" risk while the codebase is small.
+
+Whichever comes first, it is a new milestone and gets its own bounded tasks.
