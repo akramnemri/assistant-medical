@@ -3,20 +3,20 @@
 Handoff note for the next session. **Verify these claims against the repository
 before relying on them** — see `docs/prompts/05_SESSION_CONTINUITY.md`.
 
-**Last updated:** 2026-09-20, end of Task 6.3.
+**Last updated:** 2026-09-23. Task 6.3 merged; first milestone reached.
 
 ---
 
 ## Where development stopped
 
-|                |                                                                                 |
-| -------------- | ------------------------------------------------------------------------------- |
-| **Milestone**  | First milestone: a trustworthy inbound WhatsApp message pipeline                |
-| **Phase**      | 5 (Meta onboarding) complete; Phase 6 (webhooks) started                        |
-| **Last task**  | **Task 6.3 — normalise inbound messages into conversations**                    |
-| **Task state** | **Implemented, automatically tested, verified end to end locally. Not merged.** |
-| **Branch**     | **`feat/inbound-message-normalization`**, ahead of `develop`                    |
-| **Next task**  | **Task 7.1 — prove the pipeline with a real Meta message**                      |
+|                |                                                                               |
+| -------------- | ----------------------------------------------------------------------------- |
+| **Milestone**  | First milestone: a trustworthy inbound WhatsApp message pipeline              |
+| **Phase**      | 6 complete. **The inbound pipeline works end to end with real Meta traffic.** |
+| **Last task**  | **Task 6.3 — normalise inbound messages into conversations**                  |
+| **Task state** | **Merged. Verified with a real WhatsApp message from a real phone.**          |
+| **Branch**     | `develop`, clean tree                                                         |
+| **Next task**  | **Task 7.2 — milestone hardening**, then consider `develop` → `main`          |
 
 ### Manual testing
 
@@ -38,18 +38,18 @@ public HTTPS URL and a Meta app.
 The four states are defined in `docs/prompts/05_SESSION_CONTINUITY.md`. Nothing
 below is _manually verified_ unless it says so.
 
-| Area                               | State                                                                                                                 |
-| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| Auth, workspaces, RLS              | implemented · auto-tested · **manually verified**                                                                     |
-| Conversation list and thread       | implemented · auto-tested · **manually verified**                                                                     |
-| Realtime message delivery          | implemented · auto-tested · **manually verified** (browser: 60→61 messages, no reload)                                |
-| WhatsApp connection model + UI     | implemented · auto-tested · **not manually verified**                                                                 |
-| **Meta onboarding exchange (5.3)** | implemented · auto-tested against a **mocked** provider · **NOT VERIFIED — never called with real Meta credentials**  |
-| **Webhook verification (6.1)**     | implemented · auto-tested · **manually verified locally** (curl + browser) · never received a **real Meta** handshake |
-| **Webhook receiver (6.2)**         | implemented · auto-tested · **verified locally** with signed payloads · never received a **real Meta** delivery       |
-| **Inbound normalisation (6.3)**    | implemented · auto-tested · **verified locally** end to end, message visible in the browser inbox                     |
-| Outbound messaging                 | **not implemented**                                                                                                   |
-| Deployment                         | **not implemented** — never deployed anywhere                                                                         |
+| Area                               | State                                                                                                                |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Auth, workspaces, RLS              | implemented · auto-tested · **manually verified**                                                                    |
+| Conversation list and thread       | implemented · auto-tested · **manually verified**                                                                    |
+| Realtime message delivery          | implemented · auto-tested · **manually verified** (browser: 60→61 messages, no reload)                               |
+| WhatsApp connection model + UI     | implemented · auto-tested · **not manually verified**                                                                |
+| **Meta onboarding exchange (5.3)** | implemented · auto-tested against a **mocked** provider · **NOT VERIFIED — never called with real Meta credentials** |
+| **Webhook verification (6.1)**     | implemented · auto-tested · **verified against a real Meta handshake** on 2026-09-20 19:22 UTC                       |
+| **Webhook receiver (6.2)**         | implemented · auto-tested · **verified with a real signed Meta delivery**                                            |
+| **Inbound normalisation (6.3)**    | implemented · auto-tested · **verified end to end from a real phone**                                                |
+| Outbound messaging                 | **not implemented**                                                                                                  |
+| Deployment                         | **not implemented** — never deployed anywhere                                                                        |
 
 ### Automated checks — last run 2026-09-20, all passing
 
@@ -231,47 +231,91 @@ Renaming it means reconfiguring the callback URL in the Meta dashboard.
 
 ---
 
-## What Task 6.3 built
+## The first milestone was reached on 2026-09-20
 
-- `src/server/integrations/meta/inbound-messages.ts` — Meta's payload into
-  domain terms. Nothing throws: one unreadable message among a thousand is
-  reported as skipped and the rest of the batch proceeds.
-- `src/server/services/inbound-message-processing.ts` — stored event → contact →
-  conversation → message, idempotent at the message level so an event can be
-  replayed after a fix.
-- Tests: 16 normalisation unit tests, 8 pipeline integration tests.
+A real WhatsApp message, from a real phone, appeared in the application.
 
-### Verified end to end locally, 2026-09-20
+```
+phone (+216…272)
+  -> WhatsApp
+  -> Meta Cloud API
+  -> Cloudflare quick tunnel (HTTPS)
+  -> POST /api/webhooks/whatsapp
+  -> X-Hub-Signature-256 verified with the real app secret
+  -> raw event stored (whatsapp_webhook_events)
+  -> contact + conversation created
+  -> message stored once
+  -> visible in the inbox
+```
 
-Signed POST to the running dev server → event stored → contact and conversation
-created → message stored once → **visible at the top of the inbox in the browser
-with an unread badge**. Retries and rebatched deliveries produced no duplicates.
+Evidence, not inference:
 
-What this does _not_ prove: that Meta's real servers can reach us, that the real
-App Secret validates, or that a real `wamid` and timestamp look as documented.
+- `19:22:41` — `whatsapp webhook subscription verified`, Meta's own GET handshake
+- `19:27:47` — delivery stored, `routed: true`, then `processed`, `inserted: 1`
+- a genuine `wamid.HBgLMjE2MjMzMjMyNzIVAg…`, not a fixture
+- the inbox showed the sender's WhatsApp profile name with one unread
+
+**This retires the project's biggest risk.** Everything in `integrations/meta`
+had been written from documentation alone, against an API never once called. The
+payload shape, the signature scheme, the string-seconds timestamp and the wamid
+all behaved as `docs/integrations/whatsapp.md` said they would.
+
+### What it did NOT prove
+
+- **Realtime.** The page was loaded _after_ the message arrived, so "appears
+  without a refresh" — an explicit milestone criterion — is still unverified for
+  the webhook path. It was verified separately in Task 4.3 with a synthetic
+  insert, so the mechanism works; this particular path has not been watched live.
+- Media messages, message ordering across a batch, or Meta's retry behaviour
+  under a real failure.
+
+---
+
+## Immediate state, 2026-09-23
+
+- **The tunnel is dead.** It stopped at 2026-09-20 19:32 UTC. Meta still holds
+  `https://pleasant-price-decent-crowd.trycloudflare.com/api/webhooks/whatsapp`
+  as its callback URL, which now resolves to nothing. **Re-running the demo
+  needs a new tunnel and a re-registration** — see below.
+- **Docker is down**, so the local Supabase stack, and with it the integration,
+  pgTAP and E2E suites, cannot run until it is started by hand.
+- **There is a hand-inserted connection row** for phone number id
+  `1275386478999841` in Doctor A's workspace. It breaks the pgTAP suite and one
+  Playwright spec. `npm run db:reset` removes it.
+
+### Re-running the live demo
+
+1. Start Docker Desktop, then `npx supabase start`, then `npm run dev`.
+2. `cloudflared tunnel --url http://localhost:3000` — note the new URL.
+3. Re-register it: `POST /v26.0/{app-id}/subscriptions` with
+   `object=whatsapp_business_account`, the new `callback_url`, the verify token,
+   `fields=messages`, and an app access token (`{app-id}|{app-secret}`).
+   The dashboard UI for this is hard to find; the API call is reliable.
+4. The WABA is already subscribed to the app, so this step does not repeat.
+5. Insert a `connected` connection for phone number id `1275386478999841`,
+   WABA `2439042053289493`, because there is still no Embedded Signup launcher.
+
+Meta account: app id `1091720370007531`, test number `+1 (555) 190-2983`.
+`META_APP_SECRET` in `.env.local` is the real, rotated secret.
 
 ---
 
 ## Next task
 
-**Task 7.1 — the first real end-to-end demo** (`04_IMPLEMENTATION_ROADMAP.md`).
+**Task 7.2 — first milestone hardening** (`04_IMPLEMENTATION_ROADMAP.md`).
 
-Everything in code is in place. What remains is configuration:
+Task 7.1 is effectively done — the end-to-end demo happened. What 7.2 asks for,
+in the order that matters here:
 
-1. **Rotate the Meta App Secret** — it was exposed in a chat transcript on
-   2026-09-20 and must be replaced before the endpoint is publicly reachable.
-   Put the new value in `.env.local`; `META_APP_SECRET` currently holds a
-   placeholder, so real deliveries would be rejected with 403.
-2. **Expose the endpoint over public HTTPS** — a tunnel. Meta rejects
-   self-signed certificates and will not deliver to `localhost`.
-3. **Configure the webhook in the Meta dashboard** — callback URL
-   `<tunnel>/api/webhooks/whatsapp`, the verify token from `.env.local`,
-   subscribed to the `messages` field.
-4. **Connect the test number to a workspace** — phone number id
-   `1275386478999841`, WABA `2439042053289493`. There is still no Embedded
-   Signup launcher, so this is a manual insert for now.
-5. **Send a WhatsApp message from a real phone** and watch it appear.
+1. **Watch realtime live.** Inbox open, send from a phone, confirm no refresh.
+   This is the one milestone criterion still unverified.
+2. **Fix the fixture fragility.** The pgTAP suite and one E2E spec assume each
+   seeded workspace has exactly one connection; a real connection breaks them
+   with errors that point elsewhere. This cost time twice.
+3. **Decide on `/admin`**, which any signed-in user can still reach. It is the
+   largest open authorization gap and should not be promoted to `main` as is.
+4. Re-check RLS, indexes and idempotency; confirm no secret is committed.
+5. Full `verify`, `db:test`, `test:e2e` with the stack up and **no skipped
+   suites**.
 
-Meta account state as of 2026-09-20: app id `1091720370007531`, test number
-`+1 (555) 190-2983`, `hello_world` delivered and replied to, so the customer
-service window has been opened at least once.
+Only then consider `develop` → `main`.
