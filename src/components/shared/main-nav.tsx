@@ -8,14 +8,21 @@ import { ADMIN_NAV, WORKSPACE_NAV, type NavItem } from "@/lib/navigation";
 /**
  * Client component purely because the active-link state depends on the current
  * pathname. The surrounding shell stays a server component.
+ *
+ * @param showAdmin Whether to render the administration section. Decided on the
+ *   server and passed down, because a client component cannot be trusted to
+ *   determine it. Hiding the link is a courtesy, not a control: `/admin` is
+ *   guarded by its own layout, which is what actually stops access.
  */
-export function MainNav() {
+export function MainNav({ showAdmin = false }: { showAdmin?: boolean }) {
   const pathname = usePathname();
 
   return (
     <nav aria-label="Main" className="flex flex-col gap-6">
       <NavSection items={WORKSPACE_NAV} pathname={pathname} />
-      <NavSection label="Administration" items={ADMIN_NAV} pathname={pathname} />
+      {showAdmin ? (
+        <NavSection label="Administration" items={ADMIN_NAV} pathname={pathname} />
+      ) : null}
     </nav>
   );
 }

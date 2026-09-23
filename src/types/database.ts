@@ -183,6 +183,27 @@ export type Database = {
           },
         ];
       };
+      platform_admins: {
+        Row: {
+          granted_at: string;
+          granted_by: string | null;
+          note: string | null;
+          user_id: string;
+        };
+        Insert: {
+          granted_at?: string;
+          granted_by?: string | null;
+          note?: string | null;
+          user_id: string;
+        };
+        Update: {
+          granted_at?: string;
+          granted_by?: string | null;
+          note?: string | null;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       profiles: {
         Row: {
           created_at: string;
@@ -461,6 +482,7 @@ export type Database = {
         };
         Returns: boolean;
       };
+      is_platform_admin: { Args: never; Returns: boolean };
       is_workspace_member: {
         Args: { p_workspace_id: string };
         Returns: boolean;

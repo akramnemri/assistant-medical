@@ -158,8 +158,11 @@ Ordered by how much they matter.
 
 **Authorization**
 
-- `/admin` is reachable by **any signed-in user**. Roles exist and gate
-  workspace updates, but no route checks them. Largest open gap.
+- `/admin` is now closed by default: it requires a row in `platform_admins`,
+  a privilege deliberately kept separate from workspace roles and grantable
+  only with the service key. No platform admin is seeded, so the route 404s
+  for every account including both seeded doctors. To grant one locally, see
+  the comment at the foot of the `platform_admins` migration.
 
 **Conversations**
 

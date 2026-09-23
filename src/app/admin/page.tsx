@@ -7,7 +7,7 @@ export default function AdminPage() {
   return (
     <PagePlaceholder
       title="Administration"
-      description="Future home of account approval and review tools. Not gated by a role check yet."
+      description="Future home of account approval and review tools. Reachable only by platform administrators."
       implementedBy="a post-milestone task"
     />
   );
