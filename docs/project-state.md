@@ -3,7 +3,7 @@
 Handoff note for the next session. **Verify these claims against the repository
 before relying on them** — see `docs/prompts/05_SESSION_CONTINUITY.md`.
 
-**Last updated:** 2026-09-23. Task 6.3 merged; first milestone reached.
+**Last updated:** 2026-09-23. **First milestone complete, every criterion verified.**
 
 ---
 
@@ -260,28 +260,36 @@ had been written from documentation alone, against an API never once called. The
 payload shape, the signature scheme, the string-seconds timestamp and the wamid
 all behaved as `docs/integrations/whatsapp.md` said they would.
 
-### What it did NOT prove
+### Realtime, verified 2026-09-23
 
-- **Realtime.** The page was loaded _after_ the message arrived, so "appears
-  without a refresh" — an explicit milestone criterion — is still unverified for
-  the webhook path. It was verified separately in Task 4.3 with a synthetic
-  insert, so the mechanism works; this particular path has not been watched live.
-- Media messages, message ordering across a batch, or Meta's retry behaviour
-  under a real failure.
+Re-run from a clean `db:reset`: four real messages delivered and processed, then
+the **thread** left open while a message was sent from the phone — **it appeared
+with no refresh**. That was the last open milestone criterion.
+
+One trap worth remembering, because it cost a round: **the conversation list is
+not realtime, only the thread is.** Watching the list and seeing nothing is
+correct behaviour, not a failure. Test realtime on `/conversations/<id>`, and
+wait a few seconds after load before sending — the subscription takes a moment
+to go live and a message arriving in that window is still missed.
+
+### What is still NOT proven
+
+- Media messages, ordering across a large batch, or Meta's retry behaviour under
+  a real failure.
+- Anything deployed. This has only ever run on one laptop behind a tunnel.
 
 ---
 
 ## Immediate state, 2026-09-23
 
-- **The tunnel is dead.** It stopped at 2026-09-20 19:32 UTC. Meta still holds
-  `https://pleasant-price-decent-crowd.trycloudflare.com/api/webhooks/whatsapp`
-  as its callback URL, which now resolves to nothing. **Re-running the demo
-  needs a new tunnel and a re-registration** — see below.
-- **Docker is down**, so the local Supabase stack, and with it the integration,
-  pgTAP and E2E suites, cannot run until it is started by hand.
+- **A tunnel is running** at
+  `https://description-legislative-invoice-medal.trycloudflare.com`, registered
+  with Meta and working. It dies with this session; a quick tunnel gets a new
+  URL every time, so re-registration is part of every re-run.
 - **There is a hand-inserted connection row** for phone number id
   `1275386478999841` in Doctor A's workspace. It breaks the pgTAP suite and one
-  Playwright spec. `npm run db:reset` removes it.
+  Playwright spec, which assume one connection per seeded workspace.
+  `npm run db:reset` removes it — **do that before running the suites**.
 
 ### Re-running the live demo
 
