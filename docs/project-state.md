@@ -188,11 +188,14 @@ Ordered by how much they matter.
   it, and there is no way to stop Meta sending it this way. Consequences:
   treat the token as visible to anyone who can read hosting logs, keep it
   distinct from `META_APP_SECRET`, and rotate it if logs are ever shared.
-- **The test suites assume each seeded workspace has exactly one WhatsApp
-  connection.** Connecting a real number locally adds a second and breaks the
-  pgTAP suite (`more than one row returned for \gset`) and one Playwright spec,
-  with errors that point nowhere near the cause. This bit twice during Task 6.2.
-  Clean up demo connections, or fix the fixtures before the real Meta test.
+- **Local experiments still affect the suites, but they now say so.** The pgTAP
+  suite no longer aborts when a workspace has a second connection — it looks
+  fixtures up by the seed's stable identifiers and asserts they exist. The two
+  Playwright specs that genuinely depend on fixture state (the connection screen
+  and admin access) cannot be made data-independent without weakening what they
+  assert, so instead their failures name the cause and tell you to run
+  `npm run db:reset`. Both known triggers are ordinary workflow: connecting a
+  real number, and granting yourself platform admin to look at `/admin`.
 - **Media messages store only the caption.** There are no URL or MIME columns,
   so an image or voice note arrives as a row with the right type and no way to
   open it. Enough to prove the pipeline; not enough for a doctor.

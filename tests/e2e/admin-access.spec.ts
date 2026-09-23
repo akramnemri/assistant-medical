@@ -14,6 +14,12 @@ import { expect, test } from "@playwright/test";
  * Uses the accounts from supabase/seed.sql, neither of which is a platform
  * admin. That is the point: the default is closed, and a seeded admin would
  * make this suite pass for the wrong reason.
+ *
+ * **If these fail, check `platform_admins` before suspecting the guard.**
+ * Granting yourself admin locally to look at the page — which the migration's
+ * footer explains how to do — makes the account legitimately an administrator,
+ * and these tests then correctly observe that it can reach `/admin`.
+ * `npm run db:reset` clears it.
  */
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://127.0.0.1:54321";
@@ -47,8 +53,16 @@ for (const account of [DOCTOR_A, DOCTOR_B]) {
 
     await page.goto("/admin");
 
-    await expect(page.getByRole("heading", { name: /page not found/i })).toBeVisible();
-    await expect(page.getByRole("heading", { name: /administration/i })).toHaveCount(0);
+    const hint = `${account.email} reached /admin — is there a leftover platform_admins row? run \`npm run db:reset\``;
+
+    await expect(
+      page.getByRole("heading", { name: /page not found/i }),
+      hint,
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: /administration/i }),
+      hint,
+    ).toHaveCount(0);
   });
 
   test(`${account.email} is not shown the admin navigation`, async ({ page }) => {
@@ -63,7 +77,10 @@ for (const account of [DOCTOR_A, DOCTOR_B]) {
     await expect(
       page.getByRole("link", { name: "Conversations", exact: true }),
     ).toBeVisible();
-    await expect(page.getByRole("link", { name: "Admin", exact: true })).toHaveCount(0);
+    await expect(
+      page.getByRole("link", { name: "Admin", exact: true }),
+      `${account.email} was shown the admin link — leftover platform_admins row? run \`npm run db:reset\``,
+    ).toHaveCount(0);
   });
 }
 

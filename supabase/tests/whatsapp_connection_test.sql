@@ -4,13 +4,19 @@
 -- these tests reuse that data rather than rebuilding it, and use distinct ids
 -- of their own wherever they insert.
 --
+-- The seeded rows are looked up by the stable identifiers the seed assigns,
+-- never by "the connection belonging to this workspace". Developing against
+-- this project means connecting real numbers locally, and a workspace with a
+-- second connection used to make `\gset` abort with "more than one row
+-- returned" — which reads as a broken test file rather than as leftover data.
+--
 -- Run with: npm run db:test
 
 begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(26);
+select plan(28);
 
 \set doctor_a_id '11111111-1111-1111-1111-111111111111'
 \set doctor_b_id '22222222-2222-2222-2222-222222222222'
@@ -25,11 +31,32 @@ where user_id = :'doctor_b_id' \gset
 
 select id as a_connection_id
 from public.whatsapp_connections
-where workspace_id = :'a_workspace_id' \gset
+where phone_number_id = 'SYNTHETIC_PHONE_ID_A' \gset
 
 select id as b_connection_id
 from public.whatsapp_connections
-where workspace_id = :'b_workspace_id' \gset
+where waba_id = 'SYNTHETIC_WABA_B' \gset
+
+-- ---------------------------------------------------------------------------
+-- Fixtures
+-- ---------------------------------------------------------------------------
+--
+-- Checked explicitly so that a seed which has drifted fails here, naming the
+-- fixture, instead of surfacing as a puzzling assertion failure further down.
+
+select is(
+  (select count(*) from public.whatsapp_connections
+   where phone_number_id = 'SYNTHETIC_PHONE_ID_A'),
+  1::bigint,
+  'the seeded connected fixture exists exactly once (run npm run db:reset)'
+);
+
+select is(
+  (select count(*) from public.whatsapp_connections
+   where waba_id = 'SYNTHETIC_WABA_B'),
+  1::bigint,
+  'the seeded pending fixture exists exactly once (run npm run db:reset)'
+);
 
 -- ---------------------------------------------------------------------------
 -- Structure
