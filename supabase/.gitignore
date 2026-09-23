@@ -1,0 +1,11 @@
+# Supabase
+.branches
+.temp
+
+# Query snippets saved by Supabase Studio. Local scratch, not project source.
+snippets
+
+# dotenvx
+.env.keys
+.env.local
+.env.*.local
