@@ -15,6 +15,7 @@ import {
   WHATSAPP_OBJECT,
 } from "@/server/integrations/meta/webhook-payload";
 import { recordWebhookEvent } from "@/server/services/whatsapp-webhook-events";
+import { processWebhookEvent } from "@/server/services/inbound-message-processing";
 
 /**
  * Meta's WhatsApp webhook endpoint.
@@ -163,9 +164,12 @@ export async function POST(request: Request): Promise<Response> {
       requestId,
     });
 
-    // Interpreting the payload into messages is Task 6.3. Until then a
-    // delivery is durably stored and nothing more — which is the half that
-    // cannot be redone later, so it is the half that comes first.
+    // Only a new delivery is interpreted. A retry's messages are already
+    // stored, and re-running would do nothing but repeat the work.
+    if (event.created) {
+      await processWebhookEvent({ eventId: event.eventId, requestId });
+    }
+
     return acknowledge(requestId, { duplicate: !event.created });
   } catch (error) {
     return toErrorResponse(error, { requestId, operation: RECEIVE_OPERATION });
