@@ -23,13 +23,29 @@ import { completeOnboardingAction } from "@/features/whatsapp/actions";
  */
 
 /**
- * Only these origins may hand us a phone number id.
+ * Whether a `postMessage` really came from Meta.
  *
- * Meta's own sample checks `event.origin.endsWith("facebook.com")`, which
- * accepts `https://evil-facebook.com`. An attacker matching it could feed us a
- * number they do not own. Exact matching costs nothing and closes that.
+ * Meta posts from several `facebook.com` subdomains and does not document
+ * which — observed in practice from `business.facebook.com`, and an allowlist
+ * of two exact origins rejected the real flow.
+ *
+ * Their own sample uses `origin.endsWith("facebook.com")`, which also accepts
+ * `https://evil-facebook.com`; a page matching it could name a number the
+ * doctor does not own. Comparing the parsed **hostname** against a dot boundary
+ * accepts every real subdomain and no lookalike.
  */
-const TRUSTED_ORIGINS = ["https://www.facebook.com", "https://web.facebook.com"];
+function isMetaOrigin(origin: string): boolean {
+  try {
+    const url = new URL(origin);
+
+    return (
+      url.protocol === "https:" &&
+      (url.hostname === "facebook.com" || url.hostname.endsWith(".facebook.com"))
+    );
+  } catch {
+    return false;
+  }
+}
 
 const SDK_SRC = "https://connect.facebook.net/en_US/sdk.js";
 const SDK_ELEMENT_ID = "facebook-jssdk";
@@ -109,10 +125,13 @@ export function EmbeddedSignupButton({ label }: { label: string }) {
 
   useEffect(() => {
     function onMessage(event: MessageEvent) {
-      if (!TRUSTED_ORIGINS.includes(event.origin)) return;
+      if (!isMetaOrigin(event.origin)) return;
 
       try {
-        const data: unknown = JSON.parse(String(event.data));
+        // Documented as a JSON string, but tolerate an already-parsed object:
+        // the cost of being wrong here is losing the whole connection.
+        const data: unknown =
+          typeof event.data === "string" ? JSON.parse(event.data) : event.data;
 
         if (
           typeof data !== "object" ||
@@ -124,11 +143,42 @@ export function EmbeddedSignupButton({ label }: { label: string }) {
 
         const payload = data as {
           event?: unknown;
-          data?: { phone_number_id?: unknown; waba_id?: unknown };
+          data?: {
+            phone_number_id?: unknown;
+            waba_id?: unknown;
+            error_message?: unknown;
+          };
         };
 
         if (payload.event === "CANCEL") {
           setState({ kind: "cancelled" });
+          return;
+        }
+
+        // Meta reports a failure the doctor hit inside its own dialog. Its
+        // message is the only account of what went wrong, so it is shown rather
+        // than replaced with something generic.
+        if (payload.event === "ERROR") {
+          const reported = payload.data?.error_message;
+
+          setState({
+            kind: "error",
+            message:
+              typeof reported === "string" && reported.length > 0
+                ? `WhatsApp could not complete setup: ${reported}`
+                : "WhatsApp could not complete setup. Please try again.",
+          });
+          return;
+        }
+
+        // The flow can finish having created an account but no phone number.
+        // That is not an error, but there is nothing to connect yet.
+        if (payload.event === "FINISH_ONLY_WABA") {
+          setState({
+            kind: "error",
+            message:
+              "Setup finished without choosing a phone number. Start again and select a number to finish connecting.",
+          });
           return;
         }
 
