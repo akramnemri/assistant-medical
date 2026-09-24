@@ -83,6 +83,21 @@ callback race, so neither may be assumed to arrive first.
 
 Source: [Embedded Signup implementation](https://developers.facebook.com/docs/whatsapp/embedded-signup/implementation)
 
+### Two dashboard switches the SDK will not work without
+
+Found on 2026-09-24, by hitting them. Under **Facebook Login for Business →
+Settings**:
+
+1. **"Login with the JavaScript SDK" must be set to Yes.** Otherwise `FB.login`
+   refuses with "the JSSDK option is not enabled" and nothing reaches Meta.
+2. **Every origin that launches the flow must be listed under "Allowed Domains
+   for the JavaScript SDK"** — the deployment and `http://localhost:3000`. A
+   missing domain fails with a generic "can't load URL" that does not name the
+   domain, so it is worth setting before you need it.
+
+Neither is mentioned in the implementation guide, and neither is visible from
+the code: the symptom appears only when a real person clicks the button.
+
 ### Permissions
 
 | Scope                          | Needed for                                                               |
