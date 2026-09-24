@@ -235,8 +235,10 @@ describe("EmbeddedSignupButton", () => {
     );
     loginCallback?.({ authResponse: { code: "synthetic-code" } });
 
+    // Rejected before it is recorded, so it reads as "nothing arrived" — which
+    // is exactly right: nothing we would trust arrived.
     await waitFor(() =>
-      expect(screen.getByRole("alert")).toHaveTextContent(/did not say which number/i),
+      expect(screen.getByRole("alert")).toHaveTextContent(/no message was received/i),
     );
     expect(completeOnboardingAction).not.toHaveBeenCalled();
   });
@@ -296,5 +298,66 @@ describe("EmbeddedSignupButton", () => {
     loginCallback?.({ authResponse: { code: "synthetic-code" } });
 
     await waitFor(() => expect(completeOnboardingAction).toHaveBeenCalledTimes(1));
+  });
+});
+
+/**
+ * When the selection never arrives, the message has to be reportable.
+ *
+ * "Please start setup again" gave the doctor nothing, and gave whoever they
+ * asked for help nothing either — a message blocked by an extension and a
+ * message carrying no number look identical from the outside.
+ */
+describe("EmbeddedSignupButton diagnostics", () => {
+  it("says nothing arrived when no message was received", async () => {
+    const button = await renderButton();
+    await userEvent.click(button);
+    await waitFor(() => expect(loginCallback).not.toBeNull());
+
+    loginCallback?.({ authResponse: { code: "synthetic-code" } });
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/no message was received at all/i);
+    expect(completeOnboardingAction).not.toHaveBeenCalled();
+  });
+
+  it("names the event when one arrived without a phone number", async () => {
+    const button = await renderButton();
+    await userEvent.click(button);
+    await waitFor(() => expect(loginCallback).not.toBeNull());
+
+    postFromMeta({
+      type: "WA_EMBEDDED_SIGNUP",
+      event: "FINISH_GRANT_ONLY_API_ACCESS",
+      data: { waba_id: "2439042053289493" },
+    });
+    loginCallback?.({ authResponse: { code: "synthetic-code" } });
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/FINISH_GRANT_ONLY_API_ACCESS/);
+    expect(completeOnboardingAction).not.toHaveBeenCalled();
+  });
+
+  // A stale event from an abandoned attempt must not explain a later one.
+  it("does not describe a later failure with an earlier attempt's event", async () => {
+    const button = await renderButton();
+
+    await userEvent.click(button);
+    await waitFor(() => expect(loginCallback).not.toBeNull());
+    postFromMeta({
+      type: "WA_EMBEDDED_SIGNUP",
+      event: "FINISH_GRANT_ONLY_API_ACCESS",
+      data: {},
+    });
+    loginCallback?.({ authResponse: { code: "first-code" } });
+    await screen.findByRole("alert");
+
+    await userEvent.click(screen.getByRole("button"));
+    await waitFor(() => expect(loginCallback).not.toBeNull());
+    loginCallback?.({ authResponse: { code: "second-code" } });
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/no message was received at all/i);
+    expect(alert).not.toHaveTextContent(/FINISH_GRANT_ONLY_API_ACCESS/);
   });
 });

@@ -123,6 +123,11 @@ export function EmbeddedSignupButton({ label }: { label: string }) {
   // A ref is the only one of the two that is guaranteed to be current.
   const selection = useRef<SignupSelection | null>(null);
 
+  // What Meta actually sent, kept only so a failure can say so. Without it the
+  // doctor — and whoever they ask for help — sees "start setup again" with no
+  // way to tell a blocked message from an unexpected one.
+  const lastEvent = useRef<{ event: string; origin: string } | null>(null);
+
   useEffect(() => {
     function onMessage(event: MessageEvent) {
       if (!isMetaOrigin(event.origin)) return;
@@ -140,6 +145,11 @@ export function EmbeddedSignupButton({ label }: { label: string }) {
         ) {
           return;
         }
+
+        lastEvent.current = {
+          event: String((data as { event?: unknown }).event ?? "unknown"),
+          origin: event.origin,
+        };
 
         const payload = data as {
           event?: unknown;
@@ -213,6 +223,7 @@ export function EmbeddedSignupButton({ label }: { label: string }) {
     }
 
     selection.current = null;
+    lastEvent.current = null;
     setState({ kind: "loading_sdk" });
 
     let sdk: FacebookSdk;
@@ -245,10 +256,18 @@ export function EmbeddedSignupButton({ label }: { label: string }) {
         const chosen = selection.current;
 
         if (chosen === null) {
+          const seen = lastEvent.current;
+
           setState({
             kind: "error",
             message:
-              "WhatsApp did not say which number was selected. Please start setup again.",
+              seen === null
+                ? // Nothing at all came through. Almost always a browser
+                  // extension blocking Meta's frame, or a popup closed early.
+                  "WhatsApp finished without telling this page which number was selected. No message was received at all — a browser extension blocking Meta content is the usual cause. Try again in a private window."
+                : // Something came through but carried no number. Naming the
+                  // event is what makes this reportable rather than mysterious.
+                  `WhatsApp finished with "${seen.event}" but did not include a phone number. If you were reconnecting an existing number, choose the number again in the dialog rather than skipping that step.`,
           });
           return;
         }
