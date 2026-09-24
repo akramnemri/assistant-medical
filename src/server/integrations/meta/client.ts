@@ -246,3 +246,72 @@ function toProviderError(operation: string, status: number, payload: unknown): A
     { context },
   );
 }
+
+/**
+ * Subscribes our app to a customer's WhatsApp Business Account.
+ *
+ * **Without this, Meta delivers no webhooks for the account at all.** The app
+ * being subscribed to the `messages` field is not enough — each WABA must also
+ * name our app. A connection that skips this looks healthy in the UI and
+ * silently receives nothing, which is the worst failure mode this product has.
+ *
+ * Idempotent on Meta's side: subscribing an already-subscribed account
+ * succeeds, so a reconnection does not need to check first.
+ */
+export async function subscribeWabaToApp(
+  wabaId: string,
+  accessToken: string,
+): Promise<void> {
+  await metaRequest(
+    "meta.subscribeWaba",
+    `${META_GRAPH_BASE}/${wabaId}/subscribed_apps`,
+    {
+      method: "POST",
+      headers: { authorization: `Bearer ${accessToken}` },
+    },
+  );
+}
+
+/**
+ * Registers a business phone number for use with the Cloud API.
+ *
+ * Embedded Signup verifies ownership of the number; it does **not** make it
+ * usable. Until this call succeeds the number can neither send nor receive
+ * through the API.
+ *
+ * @param pin Six digits. Becomes the number's two-step verification PIN, and
+ *   must be supplied again on every future registration — so the caller has to
+ *   store it. If two-step verification is already enabled (a number moved from
+ *   the WhatsApp Business app), this must be the PIN the business already set,
+ *   and Meta rejects anything else.
+ *
+ * Meta allows **10 registration attempts per number in a rolling 72 hours**
+ * (error 133016). Retrying blindly can therefore lock a real practice out of
+ * its own number for three days, so failures here are surfaced, never retried
+ * automatically.
+ */
+export async function registerPhoneNumber(
+  phoneNumberId: string,
+  pin: string,
+  accessToken: string,
+): Promise<void> {
+  if (!/^[0-9]{6}$/.test(pin)) {
+    throw new AppError(ERROR_CODES.VALIDATION_FAILED, undefined, {
+      context: { operation: "meta.registerPhoneNumber", reason: "pin must be 6 digits" },
+    });
+  }
+
+  await metaRequest(
+    "meta.registerPhoneNumber",
+    `${META_GRAPH_BASE}/${phoneNumberId}/register`,
+    {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      // Never logged: the PIN is a credential for re-registering the number.
+      body: new URLSearchParams({ messaging_product: "whatsapp", pin }),
+    },
+  );
+}

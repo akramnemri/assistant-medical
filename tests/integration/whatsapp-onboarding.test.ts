@@ -18,10 +18,14 @@ const SECRET_KEY = process.env.SUPABASE_SECRET_KEY ?? "";
 
 const exchangeCodeForToken = vi.hoisted(() => vi.fn());
 const fetchPhoneNumber = vi.hoisted(() => vi.fn());
+const subscribeWabaToApp = vi.hoisted(() => vi.fn());
+const registerPhoneNumber = vi.hoisted(() => vi.fn());
 
 vi.mock("@/server/integrations/meta/client", () => ({
   exchangeCodeForToken,
   fetchPhoneNumber,
+  subscribeWabaToApp,
+  registerPhoneNumber,
   META_GRAPH_VERSION: "v26.0",
 }));
 
@@ -80,6 +84,8 @@ afterEach(async () => {
 
   exchangeCodeForToken.mockReset();
   fetchPhoneNumber.mockReset();
+  subscribeWabaToApp.mockReset();
+  registerPhoneNumber.mockReset();
 });
 
 function provideHappyPath() {
@@ -92,6 +98,8 @@ function provideHappyPath() {
     displayPhoneNumber: "+1 555 0199",
     verifiedName: "Synthetic Clinic",
   });
+  subscribeWabaToApp.mockResolvedValue(undefined);
+  registerPhoneNumber.mockResolvedValue(undefined);
 }
 
 async function complete(workspaceId: string) {
@@ -258,5 +266,112 @@ describeWithStack("completeWhatsAppOnboarding", () => {
       .single();
 
     expect(data).toMatchObject({ status: "connected", error_code: null });
+  });
+});
+
+/**
+ * Activation — the two provider calls that turn a proven-owned number into one
+ * that can actually send and receive.
+ *
+ * These exist because skipping them produces the worst failure this product
+ * has: a connection that reads "Connected" in the UI and silently receives
+ * nothing, with no error anywhere to explain it.
+ */
+describe.skipIf(!stackAvailable)("activating a connected number", () => {
+  it("subscribes the account and registers the number", async () => {
+    provideHappyPath();
+    await complete(workspaceA);
+
+    expect(subscribeWabaToApp).toHaveBeenCalledTimes(1);
+    expect(registerPhoneNumber).toHaveBeenCalledTimes(1);
+
+    // Six digits, because Meta accepts nothing else.
+    const pin = registerPhoneNumber.mock.calls[0]?.[1] as string;
+    expect(pin).toMatch(/^[0-9]{6}$/);
+  });
+
+  // Re-registering with a different PIN is rejected by Meta, and only Meta
+  // support can recover a number whose PIN was lost.
+  it("reuses the stored PIN when the same number is reconnected", async () => {
+    provideHappyPath();
+    await complete(workspaceA);
+    const firstPin = registerPhoneNumber.mock.calls[0]?.[1];
+
+    provideHappyPath();
+    await complete(workspaceA);
+    const secondPin = registerPhoneNumber.mock.calls[1]?.[1];
+
+    expect(secondPin).toBe(firstPin);
+  });
+
+  it("marks the connection broken when the account cannot be subscribed", async () => {
+    provideHappyPath();
+    subscribeWabaToApp.mockRejectedValue(new Error("provider refused"));
+
+    await expect(complete(workspaceA)).rejects.toThrow();
+
+    const { data } = await admin
+      .from("whatsapp_connections")
+      .select("status, error_code")
+      .eq("phone_number_id", PHONE_NUMBER_ID)
+      .single();
+
+    expect(data).toMatchObject({
+      status: "error",
+      error_code: "WEBHOOK_SUBSCRIPTION_FAILED",
+    });
+  });
+
+  it("marks the connection broken when the number cannot be registered", async () => {
+    provideHappyPath();
+    registerPhoneNumber.mockRejectedValue(new Error("provider refused"));
+
+    await expect(complete(workspaceA)).rejects.toThrow();
+
+    const { data } = await admin
+      .from("whatsapp_connections")
+      .select("status, error_code")
+      .eq("phone_number_id", PHONE_NUMBER_ID)
+      .single();
+
+    expect(data).toMatchObject({
+      status: "error",
+      error_code: "NUMBER_REGISTRATION_FAILED",
+    });
+  });
+
+  // Meta allows ten registration attempts per number per 72 hours. Retrying
+  // automatically could lock a real practice out of its own number for days.
+  it("does not retry a failed registration", async () => {
+    provideHappyPath();
+    registerPhoneNumber.mockRejectedValue(new Error("provider refused"));
+
+    await expect(complete(workspaceA)).rejects.toThrow();
+
+    expect(registerPhoneNumber).toHaveBeenCalledTimes(1);
+  });
+
+  // The token is already stored by this point; losing it would force the whole
+  // flow to be repeated for a failure that is often transient.
+  it("keeps the stored credential when activation fails", async () => {
+    provideHappyPath();
+    registerPhoneNumber.mockRejectedValue(new Error("provider refused"));
+
+    await expect(complete(workspaceA)).rejects.toThrow();
+
+    const { data: connection } = await admin
+      .from("whatsapp_connections")
+      .select("id")
+      .eq("phone_number_id", PHONE_NUMBER_ID)
+      .single();
+
+    const { data: secret } = await admin
+      .from("whatsapp_connection_secrets")
+      .select("access_token, two_step_pin")
+      .eq("connection_id", connection?.id ?? "")
+      .single();
+
+    expect(secret?.access_token).toBeTruthy();
+    expect(secret?.two_step_pin).toMatch(/^[0-9]{6}$/);
   });
 });

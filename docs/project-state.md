@@ -68,9 +68,15 @@ green run with skipped suites verifies less than it appears to, so **check the
 counts**. A run reporting "193 passed | 26 skipped" means Docker was down and
 nothing touching the database was actually verified.
 
-Known flake: `tests/integration/realtime-messages.test.ts` can fail on the
-**first run after the stack restarts**, because Realtime needs a moment before
-it serves Postgres Changes. Re-run before investigating.
+Two known flakes, both environmental. Re-run before investigating either.
+
+- `tests/integration/realtime-messages.test.ts` fails on the **first run after
+  the stack restarts** — Realtime needs a moment before it serves Postgres
+  Changes. `npm run db:reset` triggers this every time.
+- `tests/e2e/auth.spec.ts` fails after **many suite runs in one session**:
+  local Supabase rate-limits sign-in and sign-up (`[auth.rate_limit]` in
+  `supabase/config.toml`), and the symptom is a sign-in that simply does not
+  navigate. It passes when the spec is run alone.
 
 ---
 

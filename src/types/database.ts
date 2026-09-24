@@ -234,6 +234,7 @@ export type Database = {
           connection_id: string;
           created_at: string;
           token_expires_at: string | null;
+          two_step_pin: string | null;
           updated_at: string;
         };
         Insert: {
@@ -241,6 +242,7 @@ export type Database = {
           connection_id: string;
           created_at?: string;
           token_expires_at?: string | null;
+          two_step_pin?: string | null;
           updated_at?: string;
         };
         Update: {
@@ -248,6 +250,7 @@ export type Database = {
           connection_id?: string;
           created_at?: string;
           token_expires_at?: string | null;
+          two_step_pin?: string | null;
           updated_at?: string;
         };
         Relationships: [

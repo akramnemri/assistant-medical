@@ -2,9 +2,12 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { AppError, ERROR_CODES } from "@/lib/errors/app-error";
 import { logger } from "@/lib/logger/logger";
+import { randomInt } from "node:crypto";
 import {
   exchangeCodeForToken,
   fetchPhoneNumber,
+  registerPhoneNumber,
+  subscribeWabaToApp,
 } from "@/server/integrations/meta/client";
 
 /**
@@ -131,12 +134,27 @@ export async function completeWhatsAppOnboarding(
     throw databaseError(operation, upsertError, { requestId, workspaceId });
   }
 
+  // Re-registering a number needs the PIN it was first registered with, so a
+  // reconnection reuses the stored one. Generating a fresh PIN here would make
+  // the number un-reregisterable — Meta would reject it, and only Meta support
+  // could recover it.
+  const { data: existingSecret } = await admin
+    .from("whatsapp_connection_secrets")
+    .select("two_step_pin")
+    .eq("connection_id", connection.id)
+    .maybeSingle();
+
+  const pin = existingSecret?.two_step_pin ?? generateTwoStepPin();
+
   // Stored separately from the connection row, in a table no policy can read.
+  // Written **before** registration, so a PIN that Meta accepts can never be
+  // lost by a crash between the two.
   const { error: secretError } = await admin.from("whatsapp_connection_secrets").upsert(
     {
       connection_id: connection.id,
       access_token: token.accessToken,
       token_expires_at: token.expiresAt,
+      two_step_pin: pin,
     },
     { onConflict: "connection_id" },
   );
@@ -150,6 +168,19 @@ export async function completeWhatsAppOnboarding(
     throw databaseError(operation, secretError, { requestId, workspaceId });
   }
 
+  // Everything above proves ownership and stores credentials. Neither makes the
+  // number usable: without these two calls the connection looks healthy and
+  // receives nothing, which is worse than failing outright.
+  await activateConnection({
+    connectionId: connection.id,
+    phoneNumberId: phoneNumber.id,
+    wabaId,
+    pin,
+    accessToken: token.accessToken,
+    requestId,
+    workspaceId,
+  });
+
   logger.info("WhatsApp onboarding completed", {
     requestId,
     operation,
@@ -158,6 +189,83 @@ export async function completeWhatsAppOnboarding(
   });
 
   return { connectionId: connection.id, created: existing === null };
+}
+
+/** Six digits, uniformly random. Meta accepts nothing else. */
+function generateTwoStepPin(): string {
+  return String(randomInt(0, 1_000_000)).padStart(6, "0");
+}
+
+/**
+ * Makes a connected number actually able to send and receive.
+ *
+ * Two provider calls, in this order:
+ *
+ * 1. **Subscribe the WABA to our app.** Until this happens Meta delivers no
+ *    webhooks for the account, whatever the app-level subscription says.
+ * 2. **Register the phone number.** Embedded Signup proves the business owns
+ *    the number; registration is what turns it on for the Cloud API.
+ *
+ * A failure marks the connection `error` rather than throwing the whole
+ * onboarding away. The token is already stored, so the work is not lost, and
+ * the doctor sees a state they can act on instead of a connection that
+ * mysteriously never delivers.
+ *
+ * Registration is **not retried**: Meta permits ten attempts per number per 72
+ * hours, and burning them would lock a real practice out of its own number for
+ * three days.
+ */
+async function activateConnection({
+  connectionId,
+  phoneNumberId,
+  wabaId,
+  pin,
+  accessToken,
+  requestId,
+  workspaceId,
+}: {
+  connectionId: string;
+  phoneNumberId: string;
+  wabaId: string;
+  pin: string;
+  accessToken: string;
+  requestId: string;
+  workspaceId: string;
+}): Promise<void> {
+  const operation = "whatsapp.onboarding.activate";
+
+  try {
+    await subscribeWabaToApp(wabaId, accessToken);
+  } catch (error) {
+    await markConnectionFailed(connectionId, "WEBHOOK_SUBSCRIPTION_FAILED");
+
+    throw new AppError(
+      ERROR_CODES.PROVIDER_ERROR,
+      "Your number was connected but WhatsApp will not send us messages yet. Please try connecting again.",
+      { context: { operation, requestId, workspaceId, step: "subscribe" }, cause: error },
+    );
+  }
+
+  try {
+    await registerPhoneNumber(phoneNumberId, pin, accessToken);
+  } catch (error) {
+    await markConnectionFailed(connectionId, "NUMBER_REGISTRATION_FAILED");
+
+    throw new AppError(
+      ERROR_CODES.PROVIDER_ERROR,
+      // Two-step verification already set on the number is the most likely
+      // cause for a number moved from the WhatsApp Business app, and it is not
+      // something the doctor can guess from a generic failure.
+      "Your number was connected but could not be activated. If it already has WhatsApp two-step verification enabled, turn that off and try again.",
+      { context: { operation, requestId, workspaceId, step: "register" }, cause: error },
+    );
+  }
+
+  logger.info("WhatsApp number activated", {
+    requestId,
+    operation,
+    workspaceId,
+  });
 }
 
 /**
