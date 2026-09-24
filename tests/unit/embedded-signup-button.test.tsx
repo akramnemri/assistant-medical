@@ -140,8 +140,90 @@ describe("EmbeddedSignupButton", () => {
     await waitFor(() => expect(completeOnboardingAction).toHaveBeenCalledTimes(1));
   });
 
-  // The security case. `endsWith("facebook.com")` — which Meta's own sample
-  // uses — would accept this.
+  // The real flow posts from business.facebook.com, and an allowlist of two
+  // exact origins rejected it — the doctor reached the end of Meta's dialog and
+  // was told to start again.
+  it.each([
+    ["https://www.facebook.com"],
+    ["https://web.facebook.com"],
+    ["https://business.facebook.com"],
+    ["https://facebook.com"],
+  ])("accepts a selection posted from %s", async (origin) => {
+    const button = await renderButton();
+    await userEvent.click(button);
+    await waitFor(() => expect(loginCallback).not.toBeNull());
+
+    postFromMeta(selectionMessage(), origin);
+    loginCallback?.({ authResponse: { code: "synthetic-code" } });
+
+    await waitFor(() => expect(completeOnboardingAction).toHaveBeenCalledTimes(1));
+  });
+
+  it.each([
+    ["https://evil-facebook.com"],
+    ["https://facebook.com.evil.test"],
+    ["http://www.facebook.com"],
+  ])("rejects a selection posted from %s", async (origin) => {
+    const button = await renderButton();
+    await userEvent.click(button);
+    await waitFor(() => expect(loginCallback).not.toBeNull());
+
+    postFromMeta(selectionMessage("ATTACKER_NUMBER", "ATTACKER_WABA"), origin);
+    loginCallback?.({ authResponse: { code: "synthetic-code" } });
+
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    expect(completeOnboardingAction).not.toHaveBeenCalled();
+  });
+
+  it("shows Meta's own message when it reports an error", async () => {
+    const button = await renderButton();
+    await userEvent.click(button);
+
+    postFromMeta({
+      type: "WA_EMBEDDED_SIGNUP",
+      event: "ERROR",
+      data: { error_message: "This number is already registered." },
+    });
+
+    expect(
+      await screen.findByText(/this number is already registered/i),
+    ).toBeInTheDocument();
+  });
+
+  it("explains a finish that chose no phone number", async () => {
+    const button = await renderButton();
+    await userEvent.click(button);
+
+    postFromMeta({
+      type: "WA_EMBEDDED_SIGNUP",
+      event: "FINISH_ONLY_WABA",
+      data: { waba_id: "2439042053289493" },
+    });
+
+    expect(
+      await screen.findByText(/without choosing a phone number/i),
+    ).toBeInTheDocument();
+  });
+
+  // Documented as a JSON string; tolerated as an object because losing this
+  // message loses the connection.
+  it("accepts a selection delivered as an object rather than a string", async () => {
+    const button = await renderButton();
+    await userEvent.click(button);
+    await waitFor(() => expect(loginCallback).not.toBeNull());
+
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: selectionMessage(),
+        origin: "https://business.facebook.com",
+      }),
+    );
+    loginCallback?.({ authResponse: { code: "synthetic-code" } });
+
+    await waitFor(() => expect(completeOnboardingAction).toHaveBeenCalledTimes(1));
+  });
+
+  // Kept from the original security case.
   it("ignores a selection from a lookalike origin", async () => {
     const button = await renderButton();
     await userEvent.click(button);
