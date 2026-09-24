@@ -38,6 +38,11 @@ export default defineVitestConfig({
       // because members have no insert policy on messages.
       NEXT_PUBLIC_SITE_URL: localEnv.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
       SUPABASE_SECRET_KEY: localEnv.SUPABASE_SECRET_KEY ?? "",
+      // Synthetic, and fixed rather than read from .env.local: the connection
+      // screen's behaviour must not depend on whether the machine running the
+      // tests happens to have Meta onboarding configured.
+      NEXT_PUBLIC_META_APP_ID: "synthetic-meta-app-id",
+      NEXT_PUBLIC_META_CONFIG_ID: "synthetic-meta-config-id",
     },
   },
 });

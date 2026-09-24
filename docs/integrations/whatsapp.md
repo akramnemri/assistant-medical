@@ -54,6 +54,35 @@ and the coexistence page both say **15 October 2026**, while a search result
 snippet said 8 October 2026. Either way it is weeks away from this writing, so
 **v4 is the only sensible target** — but confirm the date before relying on it.
 
+### Development mode — verified 2026-09-24
+
+> While your app is in development mode, these permissions will appear in
+> Embedded Signup's authorization screen to anyone who has an **admin,
+> developer, or tester role** on your app.
+
+This is the fact that decides whether building the launcher is worthwhile
+before App Review: **the app owner can run the real flow today.** App Review
+and Advanced Access are required only to onboard _other_ businesses.
+
+### Browser implementation — verified 2026-09-24
+
+Facebook Login for Business plus Meta's JavaScript SDK
+(`https://connect.facebook.net/en_US/sdk.js`). `FB.login` is called with a
+**configuration id** created in the app dashboard, `response_type: "code"` and
+`override_default_response_type: true`. Without that last flag the SDK returns
+an **access token to the browser** instead of a code, which is precisely what
+the server-side exchange exists to prevent.
+
+The selected number arrives separately, as a `postMessage` of type
+`WA_EMBEDDED_SIGNUP` carrying `phone_number_id` and `waba_id`. It and the login
+callback race, so neither may be assumed to arrive first.
+
+⚠️ Meta's own sample validates the sender with
+`event.origin.endsWith("facebook.com")`, which accepts
+`https://evil-facebook.com`. Our implementation matches the origin exactly.
+
+Source: [Embedded Signup implementation](https://developers.facebook.com/docs/whatsapp/embedded-signup/implementation)
+
 ### Permissions
 
 | Scope                          | Needed for                                                               |
