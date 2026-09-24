@@ -17,6 +17,21 @@ const clientEnvSchema = z.object({
     .string()
     .min(1, "is required (the project's publishable key)"),
   NEXT_PUBLIC_SITE_URL: z.url("must be a valid URL, e.g. http://localhost:3000"),
+
+  /**
+   * Meta app id and the Facebook Login for Business configuration id that
+   * Embedded Signup launches from.
+   *
+   * Public by nature — both appear in the browser during Meta's own flow, and
+   * neither authorizes anything on its own. The app *secret* stays server-only;
+   * these two cannot be used without it.
+   *
+   * Optional so the product still builds and runs where onboarding is not
+   * configured. The connection screen then explains that rather than offering a
+   * button that cannot work.
+   */
+  NEXT_PUBLIC_META_APP_ID: z.string().min(1).optional(),
+  NEXT_PUBLIC_META_CONFIG_ID: z.string().min(1).optional(),
 });
 
 export type ClientEnv = z.infer<typeof clientEnvSchema>;
@@ -30,6 +45,10 @@ const rawClientEnv = {
   NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
   NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
+  // `|| undefined` because `.env.example` ships these as empty strings, and an
+  // empty string is "not configured", not a value.
+  NEXT_PUBLIC_META_APP_ID: process.env.NEXT_PUBLIC_META_APP_ID || undefined,
+  NEXT_PUBLIC_META_CONFIG_ID: process.env.NEXT_PUBLIC_META_CONFIG_ID || undefined,
 };
 
 /**
@@ -67,4 +86,20 @@ export function clientEnv(): ClientEnv {
 
   cached = parsed.data;
   return cached;
+}
+
+/**
+ * Whether the browser has what Embedded Signup needs to start.
+ *
+ * The server has its own check (`isMetaOnboardingConfigured`) covering the app
+ * secret, which the browser must never see. Both have to be true for the flow
+ * to work end to end: this one to open Meta's dialog, the server's to exchange
+ * the code it returns.
+ */
+export function isEmbeddedSignupConfigured(): boolean {
+  const env = clientEnv();
+  return (
+    env.NEXT_PUBLIC_META_APP_ID !== undefined &&
+    env.NEXT_PUBLIC_META_CONFIG_ID !== undefined
+  );
 }

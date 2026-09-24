@@ -38,7 +38,38 @@ describe("clientEnv", () => {
     setEnv(VALID_ENV);
     const { clientEnv } = await import("@/lib/config/client-env");
 
-    expect(clientEnv()).toEqual(VALID_ENV);
+    // `toMatchObject`, not `toEqual`: the optional Meta onboarding variables are
+    // also part of this configuration, and whether they are set depends on the
+    // environment rather than on anything this case is about.
+    expect(clientEnv()).toMatchObject(VALID_ENV);
+  });
+
+  // Onboarding is optional, so the app must start without it rather than
+  // failing validation on a deployment that only receives messages.
+  it("parses successfully when Meta onboarding is not configured", async () => {
+    setEnv({
+      ...VALID_ENV,
+      NEXT_PUBLIC_META_APP_ID: undefined,
+      NEXT_PUBLIC_META_CONFIG_ID: undefined,
+    });
+    const { clientEnv, isEmbeddedSignupConfigured } =
+      await import("@/lib/config/client-env");
+
+    expect(clientEnv()).toMatchObject(VALID_ENV);
+    expect(isEmbeddedSignupConfigured()).toBe(false);
+  });
+
+  // Half-configured is the state that would otherwise open Meta's dialog and
+  // have it rejected, which looks like a product fault.
+  it("treats a missing configuration id as not configured", async () => {
+    setEnv({
+      ...VALID_ENV,
+      NEXT_PUBLIC_META_APP_ID: "1091720370007531",
+      NEXT_PUBLIC_META_CONFIG_ID: undefined,
+    });
+    const { isEmbeddedSignupConfigured } = await import("@/lib/config/client-env");
+
+    expect(isEmbeddedSignupConfigured()).toBe(false);
   });
 
   // The manual setup step is "copy .env.example and fill it in", so the failure

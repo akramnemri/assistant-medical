@@ -1,0 +1,218 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+
+/**
+ * The Embedded Signup launcher (Task 8.2).
+ *
+ * What a wrong implementation costs here:
+ *
+ * - trusting any origin lets a page that can reach this tab name a phone number
+ *   the doctor does not own, and the server would then connect it;
+ * - dropping `override_default_response_type` makes Meta return an **access
+ *   token to the browser** instead of a code — the credential leak the whole
+ *   server-side exchange exists to prevent;
+ * - treating a closed dialog as a failure tells a doctor something broke when
+ *   nothing did.
+ *
+ * The SDK is stubbed because `connect.facebook.net` cannot be loaded in a test,
+ * and because the interesting behaviour is how this component reacts to what
+ * the SDK does, not the SDK itself.
+ */
+
+const completeOnboardingAction = vi.hoisted(() => vi.fn());
+
+vi.mock("@/features/whatsapp/actions", () => ({ completeOnboardingAction }));
+
+const originalEnv = process.env;
+
+type LoginOptions = Record<string, unknown>;
+type LoginCallback = (response: { authResponse?: { code?: string } | null }) => void;
+
+let lastLoginOptions: LoginOptions | null = null;
+let loginCallback: LoginCallback | null = null;
+
+function installFakeSdk() {
+  lastLoginOptions = null;
+  loginCallback = null;
+
+  (window as unknown as { FB: unknown }).FB = {
+    init: vi.fn(),
+    login: (callback: LoginCallback, options: LoginOptions) => {
+      loginCallback = callback;
+      lastLoginOptions = options;
+    },
+  };
+}
+
+/** Meta's popup message, as the component expects to receive it. */
+function postFromMeta(payload: unknown, origin = "https://www.facebook.com") {
+  window.dispatchEvent(
+    new MessageEvent("message", { data: JSON.stringify(payload), origin }),
+  );
+}
+
+function selectionMessage(
+  phoneNumberId = "1275386478999841",
+  wabaId = "2439042053289493",
+) {
+  return {
+    type: "WA_EMBEDDED_SIGNUP",
+    event: "FINISH",
+    data: { phone_number_id: phoneNumberId, waba_id: wabaId },
+  };
+}
+
+async function renderButton() {
+  const { EmbeddedSignupButton } =
+    await import("@/features/whatsapp/components/embedded-signup-button");
+
+  render(<EmbeddedSignupButton label="Connect a WhatsApp number" />);
+  return screen.getByRole("button", { name: /connect a whatsapp number/i });
+}
+
+beforeEach(() => {
+  vi.resetModules();
+  completeOnboardingAction.mockReset();
+  completeOnboardingAction.mockResolvedValue({ ok: true, created: true });
+
+  process.env = {
+    ...originalEnv,
+    NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321",
+    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test",
+    NEXT_PUBLIC_SITE_URL: "http://localhost:3000",
+    NEXT_PUBLIC_META_APP_ID: "1091720370007531",
+    NEXT_PUBLIC_META_CONFIG_ID: "synthetic-config-id",
+  };
+
+  installFakeSdk();
+});
+
+afterEach(() => {
+  delete (window as unknown as { FB?: unknown }).FB;
+  process.env = originalEnv;
+});
+
+describe("EmbeddedSignupButton", () => {
+  it("asks Meta for a code, never an access token", async () => {
+    const button = await renderButton();
+    await userEvent.click(button);
+
+    await waitFor(() => expect(lastLoginOptions).not.toBeNull());
+
+    expect(lastLoginOptions).toMatchObject({
+      config_id: "synthetic-config-id",
+      response_type: "code",
+      // Without this Meta returns an access token straight to the browser.
+      override_default_response_type: true,
+    });
+  });
+
+  it("completes onboarding with the number Meta reported and the code it returned", async () => {
+    const button = await renderButton();
+    await userEvent.click(button);
+    await waitFor(() => expect(loginCallback).not.toBeNull());
+
+    postFromMeta(selectionMessage());
+    loginCallback?.({ authResponse: { code: "synthetic-code" } });
+
+    await waitFor(() =>
+      expect(completeOnboardingAction).toHaveBeenCalledWith({
+        code: "synthetic-code",
+        phoneNumberId: "1275386478999841",
+        wabaId: "2439042053289493",
+      }),
+    );
+
+    expect(await screen.findByText(/connected/i)).toBeInTheDocument();
+  });
+
+  // The message and the callback race; neither order may lose the selection.
+  it("works when the code arrives before Meta reports the number", async () => {
+    const button = await renderButton();
+    await userEvent.click(button);
+    await waitFor(() => expect(loginCallback).not.toBeNull());
+
+    const callback = loginCallback;
+    postFromMeta(selectionMessage());
+    callback?.({ authResponse: { code: "synthetic-code" } });
+
+    await waitFor(() => expect(completeOnboardingAction).toHaveBeenCalledTimes(1));
+  });
+
+  // The security case. `endsWith("facebook.com")` — which Meta's own sample
+  // uses — would accept this.
+  it("ignores a selection from a lookalike origin", async () => {
+    const button = await renderButton();
+    await userEvent.click(button);
+    await waitFor(() => expect(loginCallback).not.toBeNull());
+
+    postFromMeta(
+      selectionMessage("ATTACKER_NUMBER", "ATTACKER_WABA"),
+      "https://evil-facebook.com",
+    );
+    loginCallback?.({ authResponse: { code: "synthetic-code" } });
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(/did not say which number/i),
+    );
+    expect(completeOnboardingAction).not.toHaveBeenCalled();
+  });
+
+  it("does not connect anything when the doctor closes the dialog", async () => {
+    const button = await renderButton();
+    await userEvent.click(button);
+    await waitFor(() => expect(loginCallback).not.toBeNull());
+
+    loginCallback?.({ authResponse: null });
+
+    expect(await screen.findByText(/setup was not finished/i)).toBeInTheDocument();
+    expect(completeOnboardingAction).not.toHaveBeenCalled();
+  });
+
+  it("reports a cancellation Meta announces through the popup", async () => {
+    const button = await renderButton();
+    await userEvent.click(button);
+
+    postFromMeta({ type: "WA_EMBEDDED_SIGNUP", event: "CANCEL" });
+
+    expect(await screen.findByText(/setup was not finished/i)).toBeInTheDocument();
+  });
+
+  it("shows the server's message when completion fails", async () => {
+    completeOnboardingAction.mockResolvedValue({
+      ok: false,
+      error: "That number is already connected to another workspace.",
+    });
+
+    const button = await renderButton();
+    await userEvent.click(button);
+    await waitFor(() => expect(loginCallback).not.toBeNull());
+
+    postFromMeta(selectionMessage());
+    loginCallback?.({ authResponse: { code: "synthetic-code" } });
+
+    expect(
+      await screen.findByText(/already connected to another workspace/i),
+    ).toBeInTheDocument();
+  });
+
+  // Meta's popup posts unrelated, non-JSON messages through the same channel.
+  it("survives a message that is not JSON", async () => {
+    const button = await renderButton();
+    await userEvent.click(button);
+    await waitFor(() => expect(loginCallback).not.toBeNull());
+
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: "not json at all",
+        origin: "https://www.facebook.com",
+      }),
+    );
+
+    postFromMeta(selectionMessage());
+    loginCallback?.({ authResponse: { code: "synthetic-code" } });
+
+    await waitFor(() => expect(completeOnboardingAction).toHaveBeenCalledTimes(1));
+  });
+});

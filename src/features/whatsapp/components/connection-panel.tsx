@@ -2,6 +2,8 @@ import { Check, Clock, Plug, TriangleAlert } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { isEmbeddedSignupConfigured } from "@/lib/config/client-env";
+import { EmbeddedSignupButton } from "@/features/whatsapp/components/embedded-signup-button";
 import { EligibilityGuide } from "@/features/whatsapp/components/eligibility-guide";
 import type {
   WhatsAppConnection,
@@ -165,7 +167,7 @@ function ConnectAction({
         ? "Continue setup"
         : "Reconnect this number";
 
-  if (!isConfigured) {
+  if (!isConfigured || !isEmbeddedSignupConfigured()) {
     return (
       <div className="flex flex-col gap-2">
         <span
@@ -186,25 +188,7 @@ function ConnectAction({
     );
   }
 
-  return (
-    <div className="flex flex-col gap-2">
-      {/* Task 5.3 replaces this with the Embedded Signup launcher. It stays
-          disabled rather than linking somewhere misleading. */}
-      <span
-        aria-disabled="true"
-        className={cn(
-          buttonVariants({ size: "lg" }),
-          "pointer-events-none w-fit opacity-50",
-        )}
-      >
-        {label}
-      </span>
-      <p className="text-muted-foreground text-sm">
-        You will be taken to WhatsApp to sign in and choose your number. You are never
-        asked for a password or an access key on this page.
-      </p>
-    </div>
-  );
+  return <EmbeddedSignupButton label={label} />;
 }
 
 function ConnectionDetails({ connection }: { connection: WhatsAppConnection }) {

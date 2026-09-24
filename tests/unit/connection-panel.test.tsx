@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { ConnectionPanel } from "@/features/whatsapp/components/connection-panel";
 import type { WhatsAppConnection } from "@/server/services/whatsapp-connections";
@@ -151,5 +151,39 @@ describe("ConnectionPanel wording", () => {
 
     expect(text).not.toMatch(/access[_ ]?token/i);
     expect(text).not.toMatch(/SYNTHETIC_TOKEN/);
+  });
+});
+
+/**
+ * The launcher needs the app id and login configuration id in the browser, and
+ * the server needs the app secret. Either half missing means the flow cannot
+ * complete, so the screen must say so rather than offer a button that opens a
+ * dialog Meta will reject.
+ */
+describe("ConnectionPanel without browser onboarding configuration", () => {
+  const originalEnv = process.env;
+
+  afterEach(() => {
+    process.env = originalEnv;
+    vi.resetModules();
+  });
+
+  it("explains that connecting is unavailable rather than offering a dead button", async () => {
+    vi.resetModules();
+    process.env = { ...originalEnv, NEXT_PUBLIC_META_CONFIG_ID: "" };
+
+    const { ConnectionPanel: Panel } =
+      await import("@/features/whatsapp/components/connection-panel");
+
+    render(
+      <Panel connection={null} isConfigured={true} workspaceName="doctor-a workspace" />,
+    );
+
+    expect(
+      screen.getByText(/connecting is unavailable on this deployment/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /connect a whatsapp number/i }),
+    ).toBeNull();
   });
 });
