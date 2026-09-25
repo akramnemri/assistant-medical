@@ -3,7 +3,7 @@
 Handoff note for the next session. **Verify these claims against the repository
 before relying on them** — see `docs/prompts/05_SESSION_CONTINUITY.md`.
 
-**Last updated:** 2026-09-23. Milestone complete, hardened, promoted to `main`.
+**Last updated:** 2026-09-25. **Verified working on the deployed site.**
 
 ---
 
@@ -294,6 +294,21 @@ not realtime, only the thread is.** Watching the list and seeing nothing is
 correct behaviour, not a failure. Test realtime on `/conversations/<id>`, and
 wait a few seconds after load before sending — the subscription takes a moment
 to go live and a message arriving in that window is still missed.
+
+### Confirmed on production, 2026-09-25
+
+The developer sent a WhatsApp message from a real phone to the connected
+number and it appeared in the deployed application at
+`assistant-medical-beta.vercel.app`. No tunnel, no laptop — Meta delivering to
+Vercel, against the hosted Supabase project.
+
+That closes the deployment milestone: the pipeline works where it is actually
+running, not only where it was built.
+
+The number is **Meta's free test number** (`+1 555 190 2983`,
+phone number id `1275386478999841`). It can only exchange messages with a few
+recipients registered in Meta's dashboard, so it proves the pipeline and cannot
+serve patients.
 
 ### What is still NOT proven
 
